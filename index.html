@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>궈리도 (Gworeedo) - 멀티플레이</title>
+    <title>궈리도 (Gworeedo) - 멀티 & AI 모드</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
@@ -37,14 +37,12 @@
         body {
             font-family: 'Noto Sans KR', sans-serif;
             background-color: var(--bg-color);
-            color: #fff;
-            margin: 0; padding: 0;
+            color: #fff; margin: 0; padding: 0;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             min-height: 100vh; overflow: hidden; user-select: none;
         }
 
-        /* 공통 스크린 UI */
         .screen {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -59,11 +57,10 @@
             text-shadow: 0 5px 20px rgba(255,255,255,0.1); text-align: center; line-height: 1.2;
         }
 
-        /* 버튼 및 패널 스타일 */
         .btn {
             background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
             color: #fff; padding: 15px 40px; font-size: 1.2rem; font-weight: 700; border-radius: 12px;
-            cursor: pointer; transition: all 0.2s ease; width: 300px; margin-bottom: 15px; backdrop-filter: blur(10px);
+            cursor: pointer; transition: all 0.2s ease; width: 300px; margin-bottom: 12px; backdrop-filter: blur(10px);
         }
         .btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .btn-primary { background: linear-gradient(45deg, var(--p1-color), var(--p2-color)); border: none; font-weight: 900; }
@@ -90,7 +87,6 @@
         .p1-active { color: var(--p1-color); text-shadow: 0 0 8px var(--p1-color); }
         .p2-active { color: var(--p2-color); text-shadow: 0 0 8px var(--p2-color); }
         .turn-indicator { font-size: 1.2rem; font-weight: 900; transition: color 0.3s ease; }
-        
         #role-indicator { font-size: 0.85rem; color: #aaa; margin-bottom: 10px; font-weight: bold; }
 
         .board-wrapper {
@@ -99,13 +95,11 @@
         }
         .board {
             display: grid; position: relative;
-            width: calc(9 * var(--c-size) + 8 * var(--w-size));
-            height: calc(9 * var(--c-size) + 8 * var(--w-size));
+            width: calc(9 * var(--c-size) + 8 * var(--w-size)); height: calc(9 * var(--c-size) + 8 * var(--w-size));
             grid-template-columns: repeat(8, var(--c-size) var(--w-size)) var(--c-size);
             grid-template-rows: repeat(8, var(--c-size) var(--w-size)) var(--c-size);
         }
 
-        /* 그리드 요소 */
         .cell { background: var(--cell-bg); border-radius: 6px; position: relative; transition: background 0.2s; }
         .cell.valid-move { cursor: pointer; box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.2); }
         .cell.valid-move::after {
@@ -115,13 +109,10 @@
         .cell.valid-move:hover { background: var(--cell-hover); }
         .h-edge, .v-edge { background: transparent; transition: background 0.2s, box-shadow 0.2s; cursor: pointer; }
         .intersection { background: transparent; pointer-events: none; }
-
-        /* 벽 */
         .wall-placed { background: var(--wall-placed); box-shadow: var(--wall-glow); z-index: 5; border-radius: 2px; }
         .wall-hover-valid { background: var(--wall-hover-valid); }
         .wall-hover-invalid { background: var(--wall-hover-invalid); }
 
-        /* 폰 */
         .pawn {
             position: absolute; width: var(--p-size); height: var(--p-size); border-radius: 50%; top: 0; left: 0;
             transform: translate(
@@ -133,7 +124,6 @@
         .pawn.p1 { background: var(--p1-color); box-shadow: var(--p1-glow); border: 2px solid #fff; }
         .pawn.p2 { background: var(--p2-color); box-shadow: var(--p2-glow); border: 2px solid #fff; }
 
-        /* 모달창 */
         .modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8);
             display: flex; justify-content: center; align-items: center; z-index: 100;
@@ -141,7 +131,7 @@
         }
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
 
-        /* --- 모션 그래픽 튜토리얼 --- */
+        /* 튜토리얼 요소 */
         .tutorial-stage {
             position: relative; width: 100%; max-width: 800px; height: 500px; 
             background: #111; border-radius: 15px; border: 2px solid #333; overflow: hidden;
@@ -149,37 +139,29 @@
         }
         .tut-text { position: absolute; top: 30px; left: 0; width: 100%; text-align: center; font-size: 1.8rem; font-weight: 900; color: var(--p1-color); z-index: 10; text-shadow: 0 2px 10px rgba(0,229,255,0.5);}
         .tut-subtext { position: absolute; top: 80px; left: 0; width: 100%; text-align: center; font-size: 1.1rem; color: #ccc; z-index: 10; line-height: 1.5;}
-        
         #tut-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 5; pointer-events: none; }
-        
-        /* 튜토리얼용 보드 패턴 */
         .tut-bg {
-            position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
-            width: 300px; height: 300px;
+            position: absolute; top: 150px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px;
             background-image: linear-gradient(#333 2px, transparent 2px), linear-gradient(90deg, #333 2px, transparent 2px);
             background-size: 60px 60px; background-position: -2px -2px; border: 2px solid #555; border-radius: 5px;
         }
-
         .tut-pawn {
             position: absolute; width: 34px; height: 34px; border-radius: 50%; 
             transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); border: 2px solid #fff;
         }
         .tut-pawn.p1 { background: var(--p1-color); box-shadow: var(--p1-glow); }
         .tut-pawn.p2 { background: var(--p2-color); box-shadow: var(--p2-glow); }
-        
         .tut-wall {
             position: absolute; background: var(--wall-placed); box-shadow: var(--wall-glow);
             border-radius: 2px; transition: all 0.4s ease; opacity: 0; transform: scale(0.5);
         }
         .tut-wall.active { opacity: 1; transform: scale(1); }
         .tut-wall.invalid { background: var(--p2-color); box-shadow: var(--p2-glow); }
-
         .tut-target-line {
             position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
             width: 300px; height: 10px; background: rgba(0, 229, 255, 0.3); box-shadow: 0 0 15px var(--p1-color);
             border-radius: 5px; opacity: 0; transition: opacity 0.5s;
         }
-
         .tut-controls { margin-top: 20px; display: flex; gap: 20px; }
 
         @media (max-width: 600px) {
@@ -196,35 +178,41 @@
     <!-- 1. 메인 메뉴 화면 -->
     <div id="screen-menu" class="screen active">
         <h1 class="title">Gworeedo<br><span style="font-size:1.2rem; color:#aaa; font-weight:normal;">Board Game</span></h1>
+        <button class="btn btn-primary" onclick="showAiMenu()">싱글 플레이 (AI 대전)</button>
         <button class="btn" onclick="startLocalGame()">로컬 플레이 (1기기 2인용)</button>
-        <button class="btn btn-primary" onclick="showScreen('screen-online')">온라인 매칭 (방 만들기/접속)</button>
+        <button class="btn" onclick="showScreen('screen-online')">온라인 매칭 (방 만들기/접속)</button>
         <button class="btn" style="background:transparent; border-color:#555;" onclick="startTutorial()">모션 그래픽 튜토리얼</button>
     </div>
 
-    <!-- 2. 온라인 로비 화면 -->
+    <!-- 2. AI 난이도 선택 화면 -->
+    <div id="screen-ai-menu" class="screen">
+        <h1 class="title" style="font-size: 2.5rem;">AI 난이도 선택</h1>
+        <button class="btn" style="border-color:#2ecc71; color:#2ecc71;" onclick="startAIGame('EASY')">EASY (초보자)</button>
+        <button class="btn" style="border-color:#f1c40f; color:#f1c40f;" onclick="startAIGame('NORMAL')">NORMAL (숙련자)</button>
+        <button class="btn" style="border-color:#e74c3c; color:#e74c3c;" onclick="startAIGame('HARD')">HARD (마스터)</button>
+        <button class="btn" style="background:transparent; border-color:#555; margin-top: 20px;" onclick="showScreen('screen-menu')">뒤로가기</button>
+    </div>
+
+    <!-- 3. 온라인 로비 화면 -->
     <div id="screen-online" class="screen">
         <div class="panel">
             <h2>온라인 대전</h2>
             <p style="color:#aaa; font-size:0.9rem; margin-bottom:30px;">코드를 공유하여 친구와 함께하세요.</p>
-            
             <button class="btn btn-primary" style="width:100%;" onclick="createRoom()">방 만들기 (P1)</button>
             <div id="room-info" style="display:none; margin: 20px 0;">
                 <p>상대방에게 아래 코드를 알려주세요:</p>
                 <h1 id="room-id-display" style="color:var(--p1-color); letter-spacing:3px; user-select:text;">-</h1>
                 <p style="font-size: 0.8rem; color: #888;">상대방 연결 대기중...</p>
             </div>
-            
             <hr style="border-color:#333; margin: 30px 0;">
-            
             <input type="text" id="join-id-input" placeholder="방 코드 입력" maxlength="5">
             <button class="btn" style="width:100%;" onclick="joinRoom()">방 접속하기 (P2)</button>
             <p id="join-status" style="color:var(--p2-color); font-size:0.9rem; margin-top:10px;"></p>
-
             <button class="btn" style="width:100%; margin-top: 20px; border:none; background:transparent;" onclick="exitGame()">뒤로가기</button>
         </div>
     </div>
 
-    <!-- 3. 게임 화면 -->
+    <!-- 4. 게임 화면 -->
     <div id="screen-game" class="screen">
         <h1 class="title" style="font-size: 2rem; margin-bottom:10px;">Gworeedo</h1>
         <div id="role-indicator">로컬 2인용 모드</div>
@@ -244,7 +232,7 @@
         <button class="btn" style="margin-top:20px; padding: 10px 20px; width:150px; background:transparent;" onclick="exitGame()">게임 종료</button>
     </div>
 
-    <!-- 4. 모션 그래픽 튜토리얼 화면 -->
+    <!-- 5. 튜토리얼 화면 -->
     <div id="screen-tutorial" class="screen">
         <div class="tutorial-stage">
             <div class="tut-text" id="tut-title">궈리도 룰 완벽 가이드</div>
@@ -259,7 +247,6 @@
         </div>
     </div>
 
-    <!-- 결과 모달 -->
     <div id="modal-result" class="modal-overlay">
         <div class="panel">
             <h2 id="win-msg" style="font-size: 2.5rem; margin: 0 0 20px;">승리!</h2>
@@ -269,12 +256,58 @@
 
 <script>
     // ==========================================
+    // 효과음 시스템 (Web Audio API) - 파일 업로드 불필요
+    // ==========================================
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function initAudio() {
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSound(type) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        if (type === 'move') {
+            // 말 이동 소리 (둔탁한 팝)
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+            gain.gain.setValueAtTime(0.5, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(now); osc.stop(now + 0.1);
+        } else if (type === 'wall') {
+            // 벽 설치 소리 (날카로운 클릭)
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(150, now);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+            osc.start(now); osc.stop(now + 0.15);
+        } else if (type === 'error') {
+            // 실패/경고 소리 (낮은 버저)
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(80, now);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
+        }
+    }
+
+    // ==========================================
     // UI 스크린 제어
     // ==========================================
     function showScreen(id) {
+        initAudio(); // 버튼 클릭 시 오디오 활성화
         document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
         document.getElementById(id).classList.add('active');
     }
+    function showAiMenu() { showScreen('screen-ai-menu'); }
 
     // ==========================================
     // 모션 그래픽 튜토리얼 로직
@@ -287,25 +320,14 @@
 
     function clearTut() {
         tutTimers.forEach(t => clearTimeout(t));
-        tutTimers = [];
-        tutLayer.innerHTML = '';
+        tutTimers = []; tutLayer.innerHTML = '';
         document.getElementById('tut-target').style.opacity = 0;
     }
-
-    function addTutTimer(fn, delay) {
-        tutTimers.push(setTimeout(fn, delay));
-    }
+    function addTutTimer(fn, delay) { tutTimers.push(setTimeout(fn, delay)); }
 
     function createTutElement(type, cls, x, y, w, h) {
         const el = document.createElement('div');
         el.className = `tut-${type} ${cls}`;
-        // 모바일 대응을 위해 % 기반 배치
-        el.style.left = `calc(50% - 150px + ${x}px)`;
-        el.style.top = `calc(150px + ${y}px)`; 
-        if(w) el.style.width = w + 'px';
-        if(h) el.style.height = h + 'px';
-        
-        // 반응형 스케일 조정을 위해 media query 값 연동 (간단한 수식)
         const isMobile = window.innerWidth <= 600;
         if(isMobile) {
             el.style.left = `calc(50% - 125px + ${x * (250/300)}px)`;
@@ -314,10 +336,13 @@
                 if(w > h) { el.style.width = (w*(250/300))+'px'; el.style.height = '10px'; }
                 else { el.style.height = (h*(250/300))+'px'; el.style.width = '10px'; }
             }
+        } else {
+            el.style.left = `calc(50% - 150px + ${x}px)`;
+            el.style.top = `calc(150px + ${y}px)`; 
+            if(w) el.style.width = w + 'px';
+            if(h) el.style.height = h + 'px';
         }
-        
-        tutLayer.appendChild(el);
-        return el;
+        tutLayer.appendChild(el); return el;
     }
 
     function moveTutPawn(pawn, x, y) {
@@ -333,191 +358,133 @@
 
     function startTutorial() {
         showScreen('screen-tutorial');
-        tutStep = 0;
-        clearTut();
+        tutStep = 0; clearTut();
         document.getElementById('tut-next-btn').innerText = "시작하기";
         tutTitle.innerText = "궈리도 룰 완벽 가이드";
         tutDesc.innerText = "아래 시작하기 버튼을 눌러 모션 그래픽으로 룰을 배워보세요.";
     }
 
     function nextTutStep() {
+        initAudio();
         document.getElementById('tut-next-btn').innerText = "다음";
-        tutStep++;
-        clearTut();
+        tutStep++; clearTut();
 
         if (tutStep === 1) {
             tutTitle.innerText = "1. 승리 조건";
             tutDesc.innerHTML = "자신의 말을 <b style='color:var(--p1-color)'>반대편 끝 줄</b>에 먼저 도달시키는 사람이 승리합니다.";
-            
             document.getElementById('tut-target').style.opacity = 1;
-            const p1 = createTutElement('pawn', 'p1', 133, 253); // 하단 중앙 쯤
+            const p1 = createTutElement('pawn', 'p1', 133, 253); 
             
-            addTutTimer(() => moveTutPawn(p1, 133, 193), 500);
-            addTutTimer(() => moveTutPawn(p1, 133, 133), 1100);
-            addTutTimer(() => moveTutPawn(p1, 133, 73), 1700);
-            addTutTimer(() => moveTutPawn(p1, 133, 13), 2300); // 골인
+            addTutTimer(() => { moveTutPawn(p1, 133, 193); playSound('move'); }, 500);
+            addTutTimer(() => { moveTutPawn(p1, 133, 133); playSound('move'); }, 1100);
+            addTutTimer(() => { moveTutPawn(p1, 133, 73); playSound('move'); }, 1700);
+            addTutTimer(() => { moveTutPawn(p1, 133, 13); playSound('move'); }, 2300);
         } 
         else if (tutStep === 2) {
             tutTitle.innerText = "2. 기본 행동 (이동 또는 벽 설치)";
             tutDesc.innerHTML = "자신의 턴에 <b style='color:#fff'>상하좌우로 1칸 이동</b>하거나, <b style='color:var(--wall-placed)'>벽을 1개 설치</b>합니다.";
-            
             const p1 = createTutElement('pawn', 'p1', 133, 193);
             
-            // 이동 시연
-            addTutTimer(() => moveTutPawn(p1, 133, 133), 800);
-            
-            // 벽 설치 시연
-            addTutTimer(() => {
-                const wall = createTutElement('wall', 'active', 60, 115, 120, 10); // 가로 벽
-            }, 1800);
-            
-            addTutTimer(() => {
-                tutDesc.innerText = "벽에 막히면 돌아가야 합니다.";
-                moveTutPawn(p1, 193, 133); // 우측으로 우회
-            }, 2600);
+            addTutTimer(() => { moveTutPawn(p1, 133, 133); playSound('move'); }, 800);
+            addTutTimer(() => { createTutElement('wall', 'active', 60, 115, 120, 10); playSound('wall'); }, 1800);
+            addTutTimer(() => { tutDesc.innerText = "벽에 막히면 돌아가야 합니다."; moveTutPawn(p1, 193, 133); playSound('move'); }, 2600);
         }
         else if (tutStep === 3) {
             tutTitle.innerText = "3. 직선 점프 규칙";
             tutDesc.innerHTML = "상대방 말과 마주친 경우, <b style='color:var(--p1-color)'>상대방을 뛰어넘어 2칸 전진</b>할 수 있습니다.";
-            
             const p1 = createTutElement('pawn', 'p1', 133, 193);
-            const p2 = createTutElement('pawn', 'p2', 133, 133);
+            createTutElement('pawn', 'p2', 133, 133);
 
             addTutTimer(() => {
-                moveTutPawn(p1, 133, 73); // p2를 넘어감
-                p1.style.transform = "scale(1.3)"; // 점프 효과
+                moveTutPawn(p1, 133, 73); p1.style.transform = "scale(1.3)"; playSound('move');
             }, 1000);
             addTutTimer(() => { p1.style.transform = "scale(1)"; }, 1300);
         }
         else if (tutStep === 4) {
             tutTitle.innerText = "4. 대각선 점프 규칙";
             tutDesc.innerHTML = "상대방 뒤에 벽이 있다면, <b style='color:var(--p1-color)'>상대방의 양 옆 대각선</b>으로 뛰어넘습니다.";
-            
             const p1 = createTutElement('pawn', 'p1', 133, 193);
-            const p2 = createTutElement('pawn', 'p2', 133, 133);
-            createTutElement('wall', 'active', 60, 115, 120, 10); // p2 뒤 벽
+            createTutElement('pawn', 'p2', 133, 133);
+            createTutElement('wall', 'active', 60, 115, 120, 10); 
 
             addTutTimer(() => {
-                moveTutPawn(p1, 73, 133); // 좌측 대각선 점프
-                p1.style.transform = "scale(1.3)";
+                moveTutPawn(p1, 73, 133); p1.style.transform = "scale(1.3)"; playSound('move');
             }, 1200);
             addTutTimer(() => { p1.style.transform = "scale(1)"; }, 1500);
         }
         else if (tutStep === 5) {
             tutTitle.innerText = "5. 길막 금지 규칙 (가장 중요)";
             tutDesc.innerHTML = "상대방이 목표로 가는 <b style='color:var(--p2-color)'>마지막 길을 아예 막아버리는 벽</b>은 설치 불가합니다.";
-            
-            const p1 = createTutElement('pawn', 'p1', 133, 193);
-            
-            // 이미 ㄷ자 모양으로 둘러싸인 상황 연출
-            createTutElement('wall', 'active', 60, 115, 120, 10); // 상단
-            createTutElement('wall', 'active', 50, 125, 10, 120); // 좌측
-            createTutElement('wall', 'active', 200, 125, 10, 120); // 우측
+            createTutElement('pawn', 'p1', 133, 193);
+            createTutElement('wall', 'active', 60, 115, 120, 10); 
+            createTutElement('wall', 'active', 50, 125, 10, 120); 
+            createTutElement('wall', 'active', 200, 125, 10, 120);
 
             addTutTimer(() => {
-                // 마지막 퇴로를 막으려는 벽
                 const badWall = createTutElement('wall', 'invalid active', 60, 235, 120, 10);
-                
-                let shake = setInterval(() => {
-                    badWall.style.transform = `translateX(${(Math.random()-0.5)*10}px)`;
-                }, 50);
+                playSound('error');
+                let shake = setInterval(() => { badWall.style.transform = `translateX(${(Math.random()-0.5)*10}px)`; }, 50);
 
                 setTimeout(() => {
-                    clearInterval(shake);
-                    badWall.style.opacity = 0; // 거부됨
+                    clearInterval(shake); badWall.style.opacity = 0; 
                     tutDesc.innerHTML = "길은 반드시 <b style='color:var(--p1-color)'>1개 이상 열려 있어야</b> 합니다!";
                 }, 1500);
             }, 1000);
             
             addTutTimer(() => { document.getElementById('tut-next-btn').innerText = "메인으로"; }, 2500);
-        }
-        else {
-            showScreen('screen-menu');
-        }
+        } else { showScreen('screen-menu'); }
     }
 
 
     // ==========================================
-    // 네트워크 (WebRTC PeerJS) 로직
+    // 네트워크 (PeerJS) 및 게임 상태 관제
     // ==========================================
-    let peer = null;
-    let conn = null;
-    let isOnline = false;
-    let myPlayerId = 0; // 0: 로컬, 1: P1(호스트), 2: P2(게스트)
+    let peer = null, conn = null;
+    let gameMode = 'LOCAL'; // 'LOCAL', 'ONLINE', 'AI'
+    let aiLevel = 'EASY';   // 'EASY', 'NORMAL', 'HARD'
+    let myPlayerId = 0; 
     const APP_PREFIX = 'gwo-';
 
     const generateShortId = () => Math.random().toString(36).substring(2, 7).toUpperCase();
 
     function createRoom() {
         const shortId = generateShortId();
-        const fullId = APP_PREFIX + shortId;
-        
         document.getElementById('room-info').style.display = 'block';
         document.getElementById('room-id-display').innerText = '생성중...';
-
-        peer = new Peer(fullId);
-        
-        peer.on('open', id => {
-            document.getElementById('room-id-display').innerText = shortId;
-        });
-
-        peer.on('connection', connection => {
-            conn = connection;
-            setupConnection(1); // 호스트는 P1
-        });
-
-        peer.on('error', err => {
-            alert('방 생성 오류: ' + err.type);
-            document.getElementById('room-info').style.display = 'none';
-        });
+        peer = new Peer(APP_PREFIX + shortId);
+        peer.on('open', () => document.getElementById('room-id-display').innerText = shortId);
+        peer.on('connection', c => { conn = c; setupConnection(1); });
+        peer.on('error', e => { alert('오류: ' + e.type); document.getElementById('room-info').style.display = 'none'; });
     }
 
     function joinRoom() {
         const shortId = document.getElementById('join-id-input').value.trim().toUpperCase();
-        if(shortId.length !== 5) { alert('5자리 방 코드를 입력하세요.'); return; }
-        
-        const fullId = APP_PREFIX + shortId;
+        if(shortId.length !== 5) return alert('5자리 방 코드를 입력하세요.');
         document.getElementById('join-status').innerText = '접속 시도중...';
-        
         peer = new Peer();
         peer.on('open', () => {
-            conn = peer.connect(fullId, { reliable: true });
-            
-            conn.on('open', () => {
-                setupConnection(2); // 게스트는 P2
-            });
-            
-            conn.on('error', () => {
-                document.getElementById('join-status').innerText = '연결 실패.';
-            });
+            conn = peer.connect(APP_PREFIX + shortId, { reliable: true });
+            conn.on('open', () => setupConnection(2));
+            conn.on('error', () => document.getElementById('join-status').innerText = '연결 실패.');
         });
-        
-        peer.on('error', err => {
-            document.getElementById('join-status').innerText = '오류: 방을 찾을 수 없습니다.';
-        });
+        peer.on('error', () => document.getElementById('join-status').innerText = '방을 찾을 수 없습니다.');
     }
 
     function setupConnection(role) {
-        isOnline = true;
-        myPlayerId = role;
-        
+        gameMode = 'ONLINE'; myPlayerId = role;
         conn.on('data', data => {
             if(data.action === 'MOVE') executeMove(data.r, data.c);
-            if(data.action === 'WALL') executeWall(data.gridR, data.gridC, data.type, data.ir, data.ic);
+            if(data.action === 'WALL') executeWall(-1, -1, data.type, data.ir, data.ic); // 온라인 좌표 동기화
         });
-
-        conn.on('close', () => {
-            alert('상대방과 연결이 끊어졌습니다.');
-            exitGame();
-        });
-
-        startNetworkGame();
+        conn.on('close', () => { alert('상대방과 연결이 끊어졌습니다.'); exitGame(); });
+        document.getElementById('role-indicator').innerHTML = `나: <span style="color:var(--p${myPlayerId}-color)">Player ${myPlayerId}</span> / 온라인 매치`;
+        initGame(); showScreen('screen-game');
     }
 
     function exitGame() {
         if(conn) { conn.close(); conn = null; }
         if(peer) { peer.destroy(); peer = null; }
-        isOnline = false; myPlayerId = 0;
+        gameMode = 'LOCAL'; myPlayerId = 0;
         document.getElementById('room-info').style.display = 'none';
         document.getElementById('join-status').innerText = '';
         document.getElementById('join-id-input').value = '';
@@ -526,29 +493,26 @@
     }
 
     function startLocalGame() {
-        isOnline = false;
-        myPlayerId = 0;
+        gameMode = 'LOCAL'; myPlayerId = 0;
         document.getElementById('role-indicator').innerText = '로컬 2인용 모드';
-        initGame();
-        showScreen('screen-game');
+        initGame(); showScreen('screen-game');
     }
 
-    function startNetworkGame() {
-        document.getElementById('role-indicator').innerHTML = 
-            `나: <span style="color:var(--p${myPlayerId}-color)">Player ${myPlayerId}</span> / 온라인 매치`;
-        initGame();
-        showScreen('screen-game');
+    function startAIGame(level) {
+        gameMode = 'AI'; aiLevel = level; myPlayerId = 1;
+        document.getElementById('role-indicator').innerText = `싱글 플레이 (AI 난이도: ${level})`;
+        initGame(); showScreen('screen-game');
     }
 
     // ==========================================
-    // 게임 코어 로직 (17x17 Grid & BFS)
+    // 코어 로직 & AI 알고리즘
     // ==========================================
     let p1, p2, turn, gameActive;
-    let boardH, boardV; 
+    let boardH, boardV, gridEls = []; 
     const boardEl = document.getElementById('board');
-    let gridEls = []; 
 
     function initGame() {
+        initAudio();
         p1 = { id: 1, r: 8, c: 4, walls: 10, targetRow: 0 };
         p2 = { id: 2, r: 0, c: 4, walls: 10, targetRow: 8 };
         turn = 1; gameActive = true;
@@ -556,8 +520,7 @@
         boardV = Array.from({length: 8}, () => Array(8).fill(false));
 
         document.getElementById('modal-result').classList.remove('active');
-        buildGrid();
-        updateUI();
+        buildGrid(); updateUI();
     }
 
     function buildGrid() {
@@ -571,23 +534,19 @@
             for (let c = 0; c < 17; c++) {
                 const el = document.createElement('div');
                 if (r % 2 === 0 && c % 2 === 0) {
-                    el.className = 'cell';
-                    el.addEventListener('click', () => attemptMove(r/2, c/2));
+                    el.className = 'cell'; el.addEventListener('click', () => attemptMove(r/2, c/2));
                 } else if (r % 2 === 1 && c % 2 === 0) {
                     el.className = 'h-edge';
                     el.addEventListener('mouseenter', () => handleWallHover(r, c, 'H'));
-                    el.addEventListener('mouseleave', () => clearWallHover());
+                    el.addEventListener('mouseleave', clearWallHover);
                     el.addEventListener('click', () => attemptWall(r, c, 'H'));
                 } else if (r % 2 === 0 && c % 2 === 1) {
                     el.className = 'v-edge';
                     el.addEventListener('mouseenter', () => handleWallHover(r, c, 'V'));
-                    el.addEventListener('mouseleave', () => clearWallHover());
+                    el.addEventListener('mouseleave', clearWallHover);
                     el.addEventListener('click', () => attemptWall(r, c, 'V'));
-                } else {
-                    el.className = 'intersection';
-                }
-                boardEl.appendChild(el);
-                gridEls[r][c] = el;
+                } else { el.className = 'intersection'; }
+                boardEl.appendChild(el); gridEls[r][c] = el;
             }
         }
     }
@@ -599,54 +558,48 @@
     const hasVWallLeft = (r, c) => isVWall(r, c-1) || isVWall(r-1, c-1);
     const hasVWallRight = (r, c) => isVWall(r, c) || isVWall(r-1, c);
 
-    // BFS 길찾기
-    function canReachTarget(player, targetRow) {
-        let q = [{r: player.r, c: player.c}];
+    // 공통 BFS 최단거리 알고리즘
+    function getDistance(player, targetRow) {
+        let q = [{r: player.r, c: player.c, d: 0}];
         let visited = Array.from({length: 9}, () => Array(9).fill(false));
         visited[player.r][player.c] = true;
         let head = 0;
 
         while (head < q.length) {
-            let {r, c} = q[head++];
-            if (r === targetRow) return true;
-            if (r > 0 && !hasHWallAbove(r, c) && !visited[r-1][c]) { visited[r-1][c] = true; q.push({r: r-1, c}); }
-            if (r < 8 && !hasHWallBelow(r, c) && !visited[r+1][c]) { visited[r+1][c] = true; q.push({r: r+1, c}); }
-            if (c > 0 && !hasVWallLeft(r, c) && !visited[r][c-1]) { visited[r][c-1] = true; q.push({r, c: c-1}); }
-            if (c < 8 && !hasVWallRight(r, c) && !visited[r][c+1]) { visited[r][c+1] = true; q.push({r, c: c+1}); }
+            let {r, c, d} = q[head++];
+            if (r === targetRow) return d;
+            if (r > 0 && !hasHWallAbove(r, c) && !visited[r-1][c]) { visited[r-1][c] = true; q.push({r: r-1, c, d: d+1}); }
+            if (r < 8 && !hasHWallBelow(r, c) && !visited[r+1][c]) { visited[r+1][c] = true; q.push({r: r+1, c, d: d+1}); }
+            if (c > 0 && !hasVWallLeft(r, c) && !visited[r][c-1]) { visited[r][c-1] = true; q.push({r, c: c-1, d: d+1}); }
+            if (c < 8 && !hasVWallRight(r, c) && !visited[r][c+1]) { visited[r][c+1] = true; q.push({r, c: c+1, d: d+1}); }
         }
-        return false;
+        return Infinity;
     }
 
-    function getLogicalWallCoords(gridR, gridC, type) {
-        let ir = type === 'H' ? (gridR - 1) / 2 : Math.min(gridR / 2, 7);
-        let ic = type === 'H' ? Math.min(gridC / 2, 7) : (gridC - 1) / 2;
-        return {ir, ic};
-    }
-
-    function checkWallValid(ir, ic, type) {
-        let cp = turn === 1 ? p1 : p2;
-        if (cp.walls <= 0) return false;
+    function checkWallValid(ir, ic, type, isSimulation = false) {
+        if (!isSimulation) {
+            let cp = turn === 1 ? p1 : p2;
+            if (cp.walls <= 0) return false;
+        }
         if (ir < 0 || ir > 7 || ic < 0 || ic > 7) return false;
 
         if (type === 'H') {
             if (boardH[ir][ic] || boardV[ir][ic] || (ic > 0 && boardH[ir][ic-1]) || (ic < 7 && boardH[ir][ic+1])) return false;
             boardH[ir][ic] = true;
-            let valid = canReachTarget(p1, p1.targetRow) && canReachTarget(p2, p2.targetRow);
-            boardH[ir][ic] = false;
-            return valid;
+            let valid = (getDistance(p1, p1.targetRow) !== Infinity && getDistance(p2, p2.targetRow) !== Infinity);
+            boardH[ir][ic] = false; return valid;
         } else {
             if (boardV[ir][ic] || boardH[ir][ic] || (ir > 0 && boardV[ir-1][ic]) || (ir < 7 && boardV[ir+1][ic])) return false;
             boardV[ir][ic] = true;
-            let valid = canReachTarget(p1, p1.targetRow) && canReachTarget(p2, p2.targetRow);
-            boardV[ir][ic] = false;
-            return valid;
+            let valid = (getDistance(p1, p1.targetRow) !== Infinity && getDistance(p2, p2.targetRow) !== Infinity);
+            boardV[ir][ic] = false; return valid;
         }
     }
 
-    function getValidMoves() {
+    function getValidMovesFor(isP1) {
         let moves = [];
-        let cp = turn === 1 ? p1 : p2;
-        let op = turn === 1 ? p2 : p1;
+        let cp = isP1 ? p1 : p2;
+        let op = isP1 ? p2 : p1;
         let r = cp.r, c = cp.c;
         const addMove = (nr, nc) => { if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) moves.push({r: nr, c: nc}); };
 
@@ -690,61 +643,61 @@
     }
 
     // ==========================================
-    // 액션 핸들러
+    // 플레이어 액션 및 UI
     // ==========================================
     function attemptMove(r, c) {
         if (!gameActive) return;
-        if (isOnline && turn !== myPlayerId) return;
+        if ((gameMode === 'ONLINE' || gameMode === 'AI') && turn !== 1) return;
         
-        const moves = getValidMoves();
+        const moves = getValidMovesFor(turn === 1);
         if (moves.some(m => m.r === r && m.c === c)) {
-            if (isOnline) conn.send({ action: 'MOVE', r, c });
+            if (gameMode === 'ONLINE') conn.send({ action: 'MOVE', r, c });
             executeMove(r, c);
         }
     }
 
     function executeMove(r, c) {
+        playSound('move');
         let cp = turn === 1 ? p1 : p2;
-        cp.r = r; cp.c = c;
-        endTurn(cp);
+        cp.r = r; cp.c = c; endTurn(cp);
     }
 
     let currentWallHover = [];
     function handleWallHover(gridR, gridC, type) {
-        if (!gameActive || (isOnline && turn !== myPlayerId)) return;
+        if (!gameActive || ((gameMode === 'ONLINE' || gameMode === 'AI') && turn !== 1)) return;
         let cp = turn === 1 ? p1 : p2;
         if (cp.walls === 0) return;
         
         clearWallHover();
-        const {ir, ic} = getLogicalWallCoords(gridR, gridC, type);
+        let ir = type === 'H' ? (gridR - 1) / 2 : Math.min(gridR / 2, 7);
+        let ic = type === 'H' ? Math.min(gridC / 2, 7) : (gridC - 1) / 2;
         const isValid = checkWallValid(ir, ic, type);
         const cls = isValid ? 'wall-hover-valid' : 'wall-hover-invalid';
 
         if (type === 'H') currentWallHover = [gridEls[ir*2+1][ic*2], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+1][ic*2+2]];
         else currentWallHover = [gridEls[ir*2][ic*2+1], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+2][ic*2+1]];
-
         currentWallHover.forEach(el => el && el.classList.add(cls));
     }
 
     function clearWallHover() {
-        currentWallHover.forEach(el => {
-            if (el) { el.classList.remove('wall-hover-valid', 'wall-hover-invalid'); }
-        });
+        currentWallHover.forEach(el => { if (el) el.classList.remove('wall-hover-valid', 'wall-hover-invalid'); });
         currentWallHover = [];
     }
 
     function attemptWall(gridR, gridC, type) {
-        if (!gameActive) return;
-        if (isOnline && turn !== myPlayerId) return;
+        if (!gameActive || ((gameMode === 'ONLINE' || gameMode === 'AI') && turn !== 1)) { playSound('error'); return; }
         
-        const {ir, ic} = getLogicalWallCoords(gridR, gridC, type);
+        let ir = type === 'H' ? (gridR - 1) / 2 : Math.min(gridR / 2, 7);
+        let ic = type === 'H' ? Math.min(gridC / 2, 7) : (gridC - 1) / 2;
+        
         if (checkWallValid(ir, ic, type)) {
-            if (isOnline) conn.send({ action: 'WALL', gridR, gridC, type, ir, ic });
-            executeWall(gridR, gridC, type, ir, ic);
-        }
+            if (gameMode === 'ONLINE') conn.send({ action: 'WALL', type, ir, ic });
+            executeWall(-1, -1, type, ir, ic);
+        } else { playSound('error'); }
     }
 
-    function executeWall(gridR, gridC, type, ir, ic) {
+    function executeWall(gR, gC, type, ir, ic) {
+        playSound('wall');
         if (type === 'H') boardH[ir][ic] = true;
         else boardV[ir][ic] = true;
         
@@ -755,27 +708,23 @@
         if (type === 'H') elements = [gridEls[ir*2+1][ic*2], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+1][ic*2+2]];
         else elements = [gridEls[ir*2][ic*2+1], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+2][ic*2+1]];
         
-        elements.forEach(el => {
-            if (el) { el.classList.remove('wall-hover-valid', 'wall-hover-invalid'); el.classList.add('wall-placed'); }
-        });
-        clearWallHover();
-        endTurn(cp);
+        elements.forEach(el => { if (el) { el.classList.remove('wall-hover-valid', 'wall-hover-invalid'); el.classList.add('wall-placed'); }});
+        clearWallHover(); endTurn(cp);
     }
 
     function endTurn(currentPlayer) {
         const pawnEl = turn === 1 ? document.getElementById('pawn1') : document.getElementById('pawn2');
-        pawnEl.style.setProperty('--r', currentPlayer.r);
-        pawnEl.style.setProperty('--c', currentPlayer.c);
+        pawnEl.style.setProperty('--r', currentPlayer.r); pawnEl.style.setProperty('--c', currentPlayer.c);
 
         if (currentPlayer.r === currentPlayer.targetRow) {
-            gameActive = false;
+            gameActive = false; playSound('win');
             document.getElementById('win-msg').innerHTML = `<span style="color:var(--p${currentPlayer.id}-color)">플레이어 ${currentPlayer.id}</span> 승리!`;
             setTimeout(() => document.getElementById('modal-result').classList.add('active'), 500);
             updateUI(); return;
         }
 
-        turn = turn === 1 ? 2 : 1;
-        updateUI();
+        turn = turn === 1 ? 2 : 1; updateUI();
+        if (gameMode === 'AI' && turn === 2 && gameActive) setTimeout(makeAIMove, 700);
     }
 
     function updateUI() {
@@ -783,27 +732,92 @@
         document.getElementById('p2-status').textContent = `P2 남은 벽: ${p2.walls}`;
         
         const turnInd = document.getElementById('turn-indicator');
-        if (isOnline && myPlayerId !== 0) {
-            turnInd.textContent = turn === myPlayerId ? "나의 턴!" : "상대방 턴...";
+        if (gameMode === 'ONLINE' || gameMode === 'AI') {
+            turnInd.textContent = turn === 1 ? "나의 턴!" : "상대방 턴...";
         } else {
             turnInd.textContent = `플레이어 ${turn} 턴`;
         }
         
         if (turn === 1) {
-            document.getElementById('p1-status').classList.add('p1-active');
-            document.getElementById('p2-status').classList.remove('p2-active');
-            turnInd.className = 'turn-indicator p1-active';
+            document.getElementById('p1-status').classList.add('p1-active'); document.getElementById('p2-status').classList.remove('p2-active'); turnInd.className = 'turn-indicator p1-active';
         } else {
-            document.getElementById('p2-status').classList.add('p2-active');
-            document.getElementById('p1-status').classList.remove('p1-active');
-            turnInd.className = 'turn-indicator p2-active';
+            document.getElementById('p2-status').classList.add('p2-active'); document.getElementById('p1-status').classList.remove('p1-active'); turnInd.className = 'turn-indicator p2-active';
         }
 
         document.querySelectorAll('.cell').forEach(c => c.classList.remove('valid-move'));
-
-        if (gameActive && (!isOnline || turn === myPlayerId)) {
-            const moves = getValidMoves();
+        if (gameActive && ((gameMode !== 'ONLINE' && gameMode !== 'AI') || turn === 1)) {
+            const moves = getValidMovesFor(true);
             moves.forEach(m => gridEls[m.r * 2][m.c * 2].classList.add('valid-move'));
+        }
+    }
+
+    // ==========================================
+    // AI 로직 설계
+    // ==========================================
+    function getBestAIMove() {
+        let moves = getValidMovesFor(false); // P2 턴
+        let bestMoves = [];
+        let minD = Infinity;
+
+        for(let m of moves) {
+            let origR = p2.r, origC = p2.c;
+            p2.r = m.r; p2.c = m.c;
+            let d = getDistance(p2, p2.targetRow);
+            p2.r = origR; p2.c = origC;
+
+            if (d < minD) { minD = d; bestMoves = [m]; }
+            else if (d === minD) { bestMoves.push(m); }
+        }
+        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    function getBestAIWall(exhaustive = false) {
+        let p1D = getDistance(p1, p1.targetRow);
+        let p2D = getDistance(p2, p2.targetRow);
+        let maxDiff = p1D - p2D; 
+        let candidates = [];
+
+        for(let ir=0; ir<8; ir++) {
+            for(let ic=0; ic<8; ic++) {
+                for(let type of ['H', 'V']) {
+                    if (checkWallValid(ir, ic, type, true)) {
+                        if(type === 'H') boardH[ir][ic] = true; else boardV[ir][ic] = true;
+                        let newP1D = getDistance(p1, p1.targetRow);
+                        let newP2D = getDistance(p2, p2.targetRow);
+                        if(type === 'H') boardH[ir][ic] = false; else boardV[ir][ic] = false;
+
+                        let diff = newP1D - newP2D;
+                        if (diff > maxDiff) candidates.push({ ir, ic, type, diff });
+                    }
+                }
+            }
+        }
+        if (candidates.length === 0) return null;
+        candidates.sort((a,b) => b.diff - a.diff);
+        return exhaustive ? candidates[0] : candidates[Math.floor(Math.random() * Math.min(candidates.length, 3))];
+    }
+
+    function makeAIMove() {
+        if(!gameActive) return;
+        let p1D = getDistance(p1, p1.targetRow);
+        let p2D = getDistance(p2, p2.targetRow);
+        let wallChoice = null;
+
+        if (p2.walls > 0) {
+            if (aiLevel === 'HARD') {
+                if (p1D <= p2D + 1) wallChoice = getBestAIWall(true);
+            } else if (aiLevel === 'NORMAL') {
+                if (p1D <= p2D && Math.random() > 0.4) wallChoice = getBestAIWall(false);
+            } else if (aiLevel === 'EASY') {
+                if (Math.random() > 0.8) wallChoice = getBestAIWall(false);
+            }
+        }
+
+        if (wallChoice) {
+            executeWall(-1, -1, wallChoice.type, wallChoice.ir, wallChoice.ic);
+        } else {
+            let m = getBestAIMove();
+            if(m) executeMove(m.r, m.c);
         }
     }
 </script>
