@@ -247,6 +247,7 @@
         </div>
     </div>
 
+    <!-- 결과 모달 -->
     <div id="modal-result" class="modal-overlay">
         <div class="panel">
             <h2 id="win-msg" style="font-size: 2.5rem; margin: 0 0 20px;">승리!</h2>
@@ -256,7 +257,7 @@
 
 <script>
     // ==========================================
-    // 효과음 시스템 (Web Audio API) - 파일 업로드 불필요
+    // 효과음 시스템 (Web Audio API)
     // ==========================================
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     let audioCtx = null;
@@ -272,10 +273,9 @@
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-
         const now = audioCtx.currentTime;
+
         if (type === 'move') {
-            // 말 이동 소리 (둔탁한 팝)
             osc.type = 'sine';
             osc.frequency.setValueAtTime(300, now);
             osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
@@ -283,19 +283,38 @@
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
             osc.start(now); osc.stop(now + 0.1);
         } else if (type === 'wall') {
-            // 벽 설치 소리 (날카로운 클릭)
             osc.type = 'square';
             osc.frequency.setValueAtTime(150, now);
             gain.gain.setValueAtTime(0.2, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
             osc.start(now); osc.stop(now + 0.15);
         } else if (type === 'error') {
-            // 실패/경고 소리 (낮은 버저)
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(80, now);
             gain.gain.setValueAtTime(0.3, now);
             gain.gain.linearRampToValueAtTime(0, now + 0.2);
             osc.start(now); osc.stop(now + 0.2);
+        } else if (type === 'win') {
+            // 승리음 (경쾌하게 올라가는 아르페지오 C - E - G - C)
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.4, now + 0.05);
+            osc.frequency.setValueAtTime(523.25, now);       
+            osc.frequency.setValueAtTime(659.25, now + 0.15); 
+            osc.frequency.setValueAtTime(783.99, now + 0.3);  
+            osc.frequency.setValueAtTime(1046.50, now + 0.45);
+            gain.gain.linearRampToValueAtTime(0, now + 1);
+            osc.start(now); osc.stop(now + 1);
+        } else if (type === 'lose') {
+            // 패배음 (우울하게 꺾이며 내려가는 톤)
+            osc.type = 'triangle';
+            gain.gain.setValueAtTime(0.5, now);
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.linearRampToValueAtTime(150, now + 0.4);
+            osc.frequency.setValueAtTime(150, now + 0.4);
+            osc.frequency.linearRampToValueAtTime(100, now + 0.8);
+            gain.gain.linearRampToValueAtTime(0, now + 1);
+            osc.start(now); osc.stop(now + 1);
         }
     }
 
@@ -303,7 +322,7 @@
     // UI 스크린 제어
     // ==========================================
     function showScreen(id) {
-        initAudio(); // 버튼 클릭 시 오디오 활성화
+        initAudio(); 
         document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
         document.getElementById(id).classList.add('active');
     }
@@ -379,6 +398,7 @@
             addTutTimer(() => { moveTutPawn(p1, 133, 133); playSound('move'); }, 1100);
             addTutTimer(() => { moveTutPawn(p1, 133, 73); playSound('move'); }, 1700);
             addTutTimer(() => { moveTutPawn(p1, 133, 13); playSound('move'); }, 2300);
+            addTutTimer(() => { playSound('win'); }, 2900); // 튜토리얼용 승리음
         } 
         else if (tutStep === 2) {
             tutTitle.innerText = "2. 기본 행동 (이동 또는 벽 설치)";
@@ -474,7 +494,7 @@
         gameMode = 'ONLINE'; myPlayerId = role;
         conn.on('data', data => {
             if(data.action === 'MOVE') executeMove(data.r, data.c);
-            if(data.action === 'WALL') executeWall(-1, -1, data.type, data.ir, data.ic); // 온라인 좌표 동기화
+            if(data.action === 'WALL') executeWall(-1, -1, data.type, data.ir, data.ic); 
         });
         conn.on('close', () => { alert('상대방과 연결이 끊어졌습니다.'); exitGame(); });
         document.getElementById('role-indicator').innerHTML = `나: <span style="color:var(--p${myPlayerId}-color)">Player ${myPlayerId}</span> / 온라인 매치`;
@@ -717,7 +737,15 @@
         pawnEl.style.setProperty('--r', currentPlayer.r); pawnEl.style.setProperty('--c', currentPlayer.c);
 
         if (currentPlayer.r === currentPlayer.targetRow) {
-            gameActive = false; playSound('win');
+            gameActive = false; 
+            
+            // 승리/패배 효과음 분기 처리
+            if (gameMode === 'LOCAL' || currentPlayer.id === myPlayerId) {
+                playSound('win'); // 로컬이거나 내가 이겼을 때
+            } else {
+                playSound('lose'); // 온라인/AI 모드에서 상대가 이겼을 때
+            }
+
             document.getElementById('win-msg').innerHTML = `<span style="color:var(--p${currentPlayer.id}-color)">플레이어 ${currentPlayer.id}</span> 승리!`;
             setTimeout(() => document.getElementById('modal-result').classList.add('active'), 500);
             updateUI(); return;
