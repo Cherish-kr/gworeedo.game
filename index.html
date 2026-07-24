@@ -225,6 +225,770 @@
 
         <div class="board-wrapper">
             <div id="board" class="board">
+                <div id="pawn1" class="pawn p1"></div>
+                <div id="pawn2" class="pawn p2"></div>
+            </div>
+        </div>
+        <button class="btn" style="margin-top:20px; padding: 10px 20px; width:150px; background:transparent;" onclick="exitGame()">메인으로</button>
+    </div>
+
+    <!-- 5. 튜토리얼 화면 -->
+    <div id="screen-tutorial" class="screen">
+        <div class="tutorial-stage">
+            <div class="tut-text" id="tut-title">궈리도 룰 완벽 가이드</div>
+            <div class="tut-subtext" id="tut-desc">아래 시작하기 버튼을 눌러 모션 그래픽으로 룰을 배워보세요.</div>
+            <div class="tut-bg"></div>
+            <div class="tut-target-line" id="tut-target"></div>
+            <div id="tut-layer"></div>
+        </div>
+        <div class="tut-controls">
+            <button class="btn" style="width:150px; background:transparent;" onclick="showScreen('screen-menu')">종료</button>
+            <button class="btn btn-primary" style="width:150px;" onclick="nextTutStep()" id="tut-next-btn">시작하기</button>
+        </div>
+    </div>
+
+    <!-- 결과 모달 -->
+    <div id="modal-result" class="modal-overlay">
+        <div class="panel">
+            <h2 id="win-msg" style="font-size: 2.5rem; margin: 0 0 20px;">승리!</h2>
+            <button class="btn btn-primary" onclick="restartGame()" style="width:100%; margin-bottom:10px;">다시 하기</button>
+            <button class="btn" style="background:transparent; border-color:#555; width:100%;" onclick="exitGame()">메인으로</button>
+        </div>
+    </div>
+
+<script>
+    // ==========================================
+    // 효과음 시스템 (Web Audio API)
+    // ==========================================
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function initAudio() {
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSound(type) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (type === 'move') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+            gain.gain.setValueAtTime(0.5, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(now); osc.stop(now + 0.1);
+        } else if (type === 'wall') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(150, now);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+            osc.start(now); osc.stop(now + 0.15);
+        } else if (type === 'error') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(80, now);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
+        } else if (type === 'win') {
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.4, now + 0.05);
+            osc.frequency.setValueAtTime(523.25, now);       
+            osc.frequency.setValueAtTime(659.25, now + 0.15); 
+            osc.frequency.setValueAtTime(783.99, now + 0.3);  
+            osc.frequency.setValueAtTime(1046.50, now + 0.45);
+            gain.gain.linearRampToValueAtTime(0, now + 1);
+            osc.start(now); osc.stop(now + 1);
+        } else if (type === 'lose') {
+            osc.type = 'triangle';
+            gain.gain.setValueAtTime(0.5, now);
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.linearRampToValueAtTime(150, now + 0.4);
+            osc.frequency.setValueAtTime(150, now + 0.4);
+            osc.frequency.linearRampToValueAtTime(100, now + 0.8);
+            gain.gain.linearRampToValueAtTime(0, now + 1);
+            osc.start(now); osc.stop(now + 1);
+        }
+    }
+
+    // ==========================================
+    // UI 스크린 제어
+    // ==========================================
+    function showScreen(id) {
+        initAudio(); 
+        document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+    function showAiMenu() { showScreen('screen-ai-menu'); }
+
+    // ==========================================
+    // 모션 그래픽 튜토리얼 로직
+    // ==========================================
+    let tutStep = 0;
+    let tutTimers = [];
+    const tutLayer = document.getElementById('tut-layer');
+    const tutTitle = document.getElementById('tut-title');
+    const tutDesc = document.getElementById('tut-desc');
+
+    function clearTut() {
+        tutTimers.forEach(t => clearTimeout(t));
+        tutTimers = []; tutLayer.innerHTML = '';
+        document.getElementById('tut-target').style.opacity = 0;
+    }
+    function addTutTimer(fn, delay) { tutTimers.push(setTimeout(fn, delay)); }
+
+    function createTutElement(type, cls, x, y, w, h) {
+        const el = document.createElement('div');
+        el.className = `tut-${type} ${cls}`;
+        const isMobile = window.innerWidth <= 600;
+        if(isMobile) {
+            el.style.left = `calc(50% - 125px + ${x * (250/300)}px)`;
+            el.style.top = `calc(130px + ${y * (250/300)}px)`;
+            if(type === 'wall') {
+                if(w > h) { el.style.width = (w*(250/300))+'px'; el.style.height = '10px'; }
+                else { el.style.height = (h*(250/300))+'px'; el.style.width = '10px'; }
+            }
+        } else {
+            el.style.left = `calc(50% - 150px + ${x}px)`;
+            el.style.top = `calc(150px + ${y}px)`; 
+            if(w) el.style.width = w + 'px';
+            if(h) el.style.height = h + 'px';
+        }
+        tutLayer.appendChild(el); return el;
+    }
+
+    function moveTutPawn(pawn, x, y) {
+        const isMobile = window.innerWidth <= 600;
+        if(isMobile) {
+            pawn.style.left = `calc(50% - 125px + ${x * (250/300)}px)`;
+            pawn.style.top = `calc(130px + ${y * (250/300)}px)`;
+        } else {
+            pawn.style.left = `calc(50% - 150px + ${x}px)`;
+            pawn.style.top = `calc(150px + ${y}px)`;
+        }
+    }
+
+    function startTutorial() {
+        showScreen('screen-tutorial');
+        tutStep = 0; clearTut();
+        document.getElementById('tut-next-btn').innerText = "시작하기";
+        tutTitle.innerText = "궈리도 룰 완벽 가이드";
+        tutDesc.innerText = "아래 시작하기 버튼을 눌러 모션 그래픽으로 룰을 배워보세요.";
+    }
+
+    function nextTutStep() {
+        initAudio();
+        document.getElementById('tut-next-btn').innerText = "다음";
+        tutStep++; clearTut();
+
+        if (tutStep === 1) {
+            tutTitle.innerText = "1. 승리 조건";
+            tutDesc.innerHTML = "자신의 말을 <b style='color:var(--p1-color)'>반대편 끝 줄</b>에 먼저 도달시키는 사람이 승리합니다.";
+            document.getElementById('tut-target').style.opacity = 1;
+            const p1 = createTutElement('pawn', 'p1', 133, 253); 
+            
+            addTutTimer(() => { moveTutPawn(p1, 133, 193); playSound('move'); }, 500);
+            addTutTimer(() => { moveTutPawn(p1, 133, 133); playSound('move'); }, 1100);
+            addTutTimer(() => { moveTutPawn(p1, 133, 73); playSound('move'); }, 1700);
+            addTutTimer(() => { moveTutPawn(p1, 133, 13); playSound('move'); }, 2300);
+            addTutTimer(() => { playSound('win'); }, 2900);
+        } 
+        else if (tutStep === 2) {
+            tutTitle.innerText = "2. 기본 행동 (이동 또는 벽 설치)";
+            tutDesc.innerHTML = "자신의 턴에 <b style='color:#fff'>상하좌우로 1칸 이동</b>하거나, <b style='color:var(--wall-placed)'>벽을 1개 설치</b>합니다.";
+            const p1 = createTutElement('pawn', 'p1', 133, 193);
+            
+            addTutTimer(() => { moveTutPawn(p1, 133, 133); playSound('move'); }, 800);
+            addTutTimer(() => { createTutElement('wall', 'active', 60, 115, 120, 10); playSound('wall'); }, 1800);
+            addTutTimer(() => { tutDesc.innerText = "벽에 막히면 돌아가야 합니다."; moveTutPawn(p1, 193, 133); playSound('move'); }, 2600);
+        }
+        else if (tutStep === 3) {
+            tutTitle.innerText = "3. 직선 점프 규칙";
+            tutDesc.innerHTML = "상대방 말과 마주친 경우, <b style='color:var(--p1-color)'>상대방을 뛰어넘어 2칸 전진</b>할 수 있습니다.";
+            const p1 = createTutElement('pawn', 'p1', 133, 193);
+            createTutElement('pawn', 'p2', 133, 133);
+
+            addTutTimer(() => {
+                moveTutPawn(p1, 133, 73); p1.style.transform = "scale(1.3)"; playSound('move');
+            }, 1000);
+            addTutTimer(() => { p1.style.transform = "scale(1)"; }, 1300);
+        }
+        else if (tutStep === 4) {
+            tutTitle.innerText = "4. 대각선 점프 규칙";
+            tutDesc.innerHTML = "상대방 뒤에 벽이 있다면, <b style='color:var(--p1-color)'>상대방의 양 옆 대각선</b>으로 뛰어넘습니다.";
+            const p1 = createTutElement('pawn', 'p1', 133, 193);
+            createTutElement('pawn', 'p2', 133, 133);
+            createTutElement('wall', 'active', 60, 115, 120, 10); 
+
+            addTutTimer(() => {
+                moveTutPawn(p1, 73, 133); p1.style.transform = "scale(1.3)"; playSound('move');
+            }, 1200);
+            addTutTimer(() => { p1.style.transform = "scale(1)"; }, 1500);
+        }
+        else if (tutStep === 5) {
+            tutTitle.innerText = "5. 길막 금지 규칙 (가장 중요)";
+            tutDesc.innerHTML = "상대방이 목표로 가는 <b style='color:var(--p2-color)'>마지막 길을 아예 막아버리는 벽</b>은 설치 불가합니다.";
+            createTutElement('pawn', 'p1', 133, 193);
+            createTutElement('wall', 'active', 60, 115, 120, 10); 
+            createTutElement('wall', 'active', 50, 125, 10, 120); 
+            createTutElement('wall', 'active', 200, 125, 10, 120);
+
+            addTutTimer(() => {
+                const badWall = createTutElement('wall', 'invalid active', 60, 235, 120, 10);
+                playSound('error');
+                let shake = setInterval(() => { badWall.style.transform = `translateX(${(Math.random()-0.5)*10}px)`; }, 50);
+
+                setTimeout(() => {
+                    clearInterval(shake); badWall.style.opacity = 0; 
+                    tutDesc.innerHTML = "길은 반드시 <b style='color:var(--p1-color)'>1개 이상 열려 있어야</b> 합니다!";
+                }, 1500);
+            }, 1000);
+            
+            addTutTimer(() => { document.getElementById('tut-next-btn').innerText = "메인으로"; }, 2500);
+        } else { showScreen('screen-menu'); }
+    }
+
+
+    // ==========================================
+    // 네트워크 (PeerJS) 및 게임 상태 관제
+    // ==========================================
+    let peer = null, conn = null;
+    let gameMode = 'LOCAL'; // 'LOCAL', 'ONLINE', 'AI'
+    let aiLevel = 'EASY';   
+    let myPlayerId = 0; 
+    const APP_PREFIX = 'gwo-';
+
+    const generateShortId = () => Math.random().toString(36).substring(2, 7).toUpperCase();
+
+    function createRoom() {
+        const shortId = generateShortId();
+        document.getElementById('room-info').style.display = 'block';
+        document.getElementById('room-id-display').innerText = '생성중...';
+        peer = new Peer(APP_PREFIX + shortId);
+        peer.on('open', () => document.getElementById('room-id-display').innerText = shortId);
+        peer.on('connection', c => { conn = c; setupConnection(1); });
+        peer.on('error', e => { alert('오류: ' + e.type); document.getElementById('room-info').style.display = 'none'; });
+    }
+
+    function joinRoom() {
+        const shortId = document.getElementById('join-id-input').value.trim().toUpperCase();
+        if(shortId.length !== 5) return alert('5자리 방 코드를 입력하세요.');
+        document.getElementById('join-status').innerText = '접속 시도중...';
+        peer = new Peer();
+        peer.on('open', () => {
+            conn = peer.connect(APP_PREFIX + shortId, { reliable: true });
+            conn.on('open', () => setupConnection(2));
+            conn.on('error', () => document.getElementById('join-status').innerText = '연결 실패.');
+        });
+        peer.on('error', () => document.getElementById('join-status').innerText = '방을 찾을 수 없습니다.');
+    }
+
+    function setupConnection(role) {
+        gameMode = 'ONLINE'; myPlayerId = role;
+        conn.on('data', data => {
+            if(data.action === 'MOVE') executeMove(data.r, data.c);
+            if(data.action === 'WALL') executeWall(-1, -1, data.type, data.ir, data.ic); 
+            if(data.action === 'RESTART') { initGame(); } // 상대방이 재시작을 눌렀을 때
+        });
+        conn.on('close', () => { alert('상대방과 연결이 끊어졌습니다.'); exitGame(); });
+        document.getElementById('role-indicator').innerHTML = `나: <span style="color:var(--p${myPlayerId}-color)">Player ${myPlayerId}</span> / 온라인 매치`;
+        initGame(); showScreen('screen-game');
+    }
+
+    function exitGame() {
+        if(conn) { conn.close(); conn = null; }
+        if(peer) { peer.destroy(); peer = null; }
+        gameMode = 'LOCAL'; myPlayerId = 0;
+        document.getElementById('room-info').style.display = 'none';
+        document.getElementById('join-status').innerText = '';
+        document.getElementById('join-id-input').value = '';
+        document.getElementById('modal-result').classList.remove('active');
+        showScreen('screen-menu');
+    }
+
+    function startLocalGame() {
+        gameMode = 'LOCAL'; myPlayerId = 0;
+        document.getElementById('role-indicator').innerText = '로컬 2인용 모드';
+        initGame(); showScreen('screen-game');
+    }
+
+    function startAIGame(level) {
+        gameMode = 'AI'; aiLevel = level; myPlayerId = 1;
+        document.getElementById('role-indicator').innerText = `싱글 플레이 (AI 난이도: ${level})`;
+        initGame(); showScreen('screen-game');
+    }
+
+    function restartGame() {
+        if (gameMode === 'ONLINE' && conn) {
+            conn.send({ action: 'RESTART' }); // 상대방에게 재시작 신호 전송
+        }
+        initGame();
+    }
+
+    // ==========================================
+    // 코어 로직 & AI 알고리즘
+    // ==========================================
+    let p1, p2, turn, gameActive;
+    let boardH, boardV, gridEls = []; 
+    const boardEl = document.getElementById('board');
+
+    function initGame() {
+        initAudio();
+        p1 = { id: 1, r: 8, c: 4, walls: 10, targetRow: 0 };
+        p2 = { id: 2, r: 0, c: 4, walls: 10, targetRow: 8 };
+        turn = 1; gameActive = true;
+        boardH = Array.from({length: 8}, () => Array(8).fill(false));
+        boardV = Array.from({length: 8}, () => Array(8).fill(false));
+
+        // 🟢 버그 수정: 이전 게임 위치(좌표)가 꼬이지 않도록 CSS 변수를 명시적으로 초기화
+        const p1El = document.getElementById('pawn1');
+        const p2El = document.getElementById('pawn2');
+        p1El.style.setProperty('--r', 8); p1El.style.setProperty('--c', 4);
+        p2El.style.setProperty('--r', 0); p2El.style.setProperty('--c', 4);
+
+        document.getElementById('modal-result').classList.remove('active');
+        buildGrid(); updateUI();
+    }
+
+    function buildGrid() {
+        const pawn1 = document.getElementById('pawn1');
+        const pawn2 = document.getElementById('pawn2');
+        boardEl.innerHTML = '';
+        boardEl.appendChild(pawn1); boardEl.appendChild(pawn2);
+        gridEls = Array.from({length: 17}, () => Array(17).fill(null));
+
+        for (let r = 0; r < 17; r++) {
+            for (let c = 0; c < 17; c++) {
+                const el = document.createElement('div');
+                if (r % 2 === 0 && c % 2 === 0) {
+                    el.className = 'cell'; el.addEventListener('click', () => attemptMove(r/2, c/2));
+                } else if (r % 2 === 1 && c % 2 === 0) {
+                    el.className = 'h-edge';
+                    el.addEventListener('mouseenter', () => handleWallHover(r, c, 'H'));
+                    el.addEventListener('mouseleave', clearWallHover);
+                    el.addEventListener('click', () => attemptWall(r, c, 'H'));
+                } else if (r % 2 === 0 && c % 2 === 1) {
+                    el.className = 'v-edge';
+                    el.addEventListener('mouseenter', () => handleWallHover(r, c, 'V'));
+                    el.addEventListener('mouseleave', clearWallHover);
+                    el.addEventListener('click', () => attemptWall(r, c, 'V'));
+                } else { el.className = 'intersection'; }
+                boardEl.appendChild(el); gridEls[r][c] = el;
+            }
+        }
+    }
+
+    const isHWall = (ir, ic) => (ir >= 0 && ir < 8 && ic >= 0 && ic < 8) ? boardH[ir][ic] : false;
+    const isVWall = (ir, ic) => (ir >= 0 && ir < 8 && ic >= 0 && ic < 8) ? boardV[ir][ic] : false;
+    const hasHWallAbove = (r, c) => isHWall(r-1, c) || isHWall(r-1, c-1);
+    const hasHWallBelow = (r, c) => isHWall(r, c) || isHWall(r, c-1);
+    const hasVWallLeft = (r, c) => isVWall(r, c-1) || isVWall(r-1, c-1);
+    const hasVWallRight = (r, c) => isVWall(r, c) || isVWall(r-1, c);
+
+    function getDistance(player, targetRow) {
+        let q = [{r: player.r, c: player.c, d: 0}];
+        let visited = Array.from({length: 9}, () => Array(9).fill(false));
+        visited[player.r][player.c] = true;
+        let head = 0;
+
+        while (head < q.length) {
+            let {r, c, d} = q[head++];
+            if (r === targetRow) return d;
+            if (r > 0 && !hasHWallAbove(r, c) && !visited[r-1][c]) { visited[r-1][c] = true; q.push({r: r-1, c, d: d+1}); }
+            if (r < 8 && !hasHWallBelow(r, c) && !visited[r+1][c]) { visited[r+1][c] = true; q.push({r: r+1, c, d: d+1}); }
+            if (c > 0 && !hasVWallLeft(r, c) && !visited[r][c-1]) { visited[r][c-1] = true; q.push({r, c: c-1, d: d+1}); }
+            if (c < 8 && !hasVWallRight(r, c) && !visited[r][c+1]) { visited[r][c+1] = true; q.push({r, c: c+1, d: d+1}); }
+        }
+        return Infinity;
+    }
+
+    function checkWallValid(ir, ic, type, isSimulation = false) {
+        if (!isSimulation) {
+            let cp = turn === 1 ? p1 : p2;
+            if (cp.walls <= 0) return false;
+        }
+        if (ir < 0 || ir > 7 || ic < 0 || ic > 7) return false;
+
+        if (type === 'H') {
+            if (boardH[ir][ic] || boardV[ir][ic] || (ic > 0 && boardH[ir][ic-1]) || (ic < 7 && boardH[ir][ic+1])) return false;
+            boardH[ir][ic] = true;
+            let valid = (getDistance(p1, p1.targetRow) !== Infinity && getDistance(p2, p2.targetRow) !== Infinity);
+            boardH[ir][ic] = false; return valid;
+        } else {
+            if (boardV[ir][ic] || boardH[ir][ic] || (ir > 0 && boardV[ir-1][ic]) || (ir < 7 && boardV[ir+1][ic])) return false;
+            boardV[ir][ic] = true;
+            let valid = (getDistance(p1, p1.targetRow) !== Infinity && getDistance(p2, p2.targetRow) !== Infinity);
+            boardV[ir][ic] = false; return valid;
+        }
+    }
+
+    function getValidMovesFor(isP1) {
+        let moves = [];
+        let cp = isP1 ? p1 : p2;
+        let op = isP1 ? p2 : p1;
+        let r = cp.r, c = cp.c;
+        const addMove = (nr, nc) => { if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) moves.push({r: nr, c: nc}); };
+
+        if (r > 0 && !hasHWallAbove(r, c)) {
+            if (op.r === r-1 && op.c === c) {
+                if (r-1 > 0 && !hasHWallAbove(r-1, c)) addMove(r-2, c);
+                else {
+                    if (c > 0 && !hasVWallLeft(r-1, c)) addMove(r-1, c-1);
+                    if (c < 8 && !hasVWallRight(r-1, c)) addMove(r-1, c+1);
+                }
+            } else addMove(r-1, c);
+        }
+        if (r < 8 && !hasHWallBelow(r, c)) {
+            if (op.r === r+1 && op.c === c) {
+                if (r+1 < 8 && !hasHWallBelow(r+1, c)) addMove(r+2, c);
+                else {
+                    if (c > 0 && !hasVWallLeft(r+1, c)) addMove(r+1, c-1);
+                    if (c < 8 && !hasVWallRight(r+1, c)) addMove(r+1, c+1);
+                }
+            } else addMove(r+1, c);
+        }
+        if (c > 0 && !hasVWallLeft(r, c)) {
+            if (op.r === r && op.c === c-1) {
+                if (c-1 > 0 && !hasVWallLeft(r, c-1)) addMove(r, c-2);
+                else {
+                    if (r > 0 && !hasHWallAbove(r, c-1)) addMove(r-1, c-1);
+                    if (r < 8 && !hasHWallBelow(r, c-1)) addMove(r+1, c-1);
+                }
+            } else addMove(r, c-1);
+        }
+        if (c < 8 && !hasVWallRight(r, c)) {
+            if (op.r === r && op.c === c+1) {
+                if (c+1 < 8 && !hasVWallRight(r, c+1)) addMove(r, c+2);
+                else {
+                    if (r > 0 && !hasHWallAbove(r, c+1)) addMove(r-1, c+1);
+                    if (r < 8 && !hasHWallBelow(r, c+1)) addMove(r+1, c+1);
+                }
+            } else addMove(r, c+1);
+        }
+        return moves;
+    }
+
+    // ==========================================
+    // 플레이어 액션 및 UI
+    // ==========================================
+    function attemptMove(r, c) {
+        if (!gameActive) return;
+        if ((gameMode === 'ONLINE' || gameMode === 'AI') && turn !== myPlayerId) return;
+        
+        // 🟢 버그 수정: 무조건 P1(true) 기준이 아니라 현재 턴(turn === 1)을 기준으로 이동 가능 체크
+        const moves = getValidMovesFor(turn === 1);
+        if (moves.some(m => m.r === r && m.c === c)) {
+            if (gameMode === 'ONLINE') conn.send({ action: 'MOVE', r, c });
+            executeMove(r, c);
+        }
+    }
+
+    function executeMove(r, c) {
+        playSound('move');
+        let cp = turn === 1 ? p1 : p2;
+        cp.r = r; cp.c = c; endTurn(cp);
+    }
+
+    let currentWallHover = [];
+    function handleWallHover(gridR, gridC, type) {
+        if (!gameActive || ((gameMode === 'ONLINE' || gameMode === 'AI') && turn !== myPlayerId)) return;
+        let cp = turn === 1 ? p1 : p2;
+        if (cp.walls === 0) return;
+        
+        clearWallHover();
+        let ir = type === 'H' ? (gridR - 1) / 2 : Math.min(gridR / 2, 7);
+        let ic = type === 'H' ? Math.min(gridC / 2, 7) : (gridC - 1) / 2;
+        const isValid = checkWallValid(ir, ic, type);
+        const cls = isValid ? 'wall-hover-valid' : 'wall-hover-invalid';
+
+        if (type === 'H') currentWallHover = [gridEls[ir*2+1][ic*2], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+1][ic*2+2]];
+        else currentWallHover = [gridEls[ir*2][ic*2+1], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+2][ic*2+1]];
+        currentWallHover.forEach(el => el && el.classList.add(cls));
+    }
+
+    function clearWallHover() {
+        currentWallHover.forEach(el => { if (el) el.classList.remove('wall-hover-valid', 'wall-hover-invalid'); });
+        currentWallHover = [];
+    }
+
+    function attemptWall(gridR, gridC, type) {
+        if (!gameActive || ((gameMode === 'ONLINE' || gameMode === 'AI') && turn !== myPlayerId)) { playSound('error'); return; }
+        
+        let ir = type === 'H' ? (gridR - 1) / 2 : Math.min(gridR / 2, 7);
+        let ic = type === 'H' ? Math.min(gridC / 2, 7) : (gridC - 1) / 2;
+        
+        if (checkWallValid(ir, ic, type)) {
+            if (gameMode === 'ONLINE') conn.send({ action: 'WALL', type, ir, ic });
+            executeWall(-1, -1, type, ir, ic);
+        } else { playSound('error'); }
+    }
+
+    function executeWall(gR, gC, type, ir, ic) {
+        playSound('wall');
+        if (type === 'H') boardH[ir][ic] = true;
+        else boardV[ir][ic] = true;
+        
+        let cp = turn === 1 ? p1 : p2;
+        cp.walls--;
+        
+        let elements = [];
+        if (type === 'H') elements = [gridEls[ir*2+1][ic*2], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+1][ic*2+2]];
+        else elements = [gridEls[ir*2][ic*2+1], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+2][ic*2+1]];
+        
+        elements.forEach(el => { if (el) { el.classList.remove('wall-hover-valid', 'wall-hover-invalid'); el.classList.add('wall-placed'); }});
+        clearWallHover(); endTurn(cp);
+    }
+
+    function endTurn(currentPlayer) {
+        const pawnEl = turn === 1 ? document.getElementById('pawn1') : document.getElementById('pawn2');
+        pawnEl.style.setProperty('--r', currentPlayer.r); pawnEl.style.setProperty('--c', currentPlayer.c);
+
+        if (currentPlayer.r === currentPlayer.targetRow) {
+            gameActive = false; 
+            
+            if (gameMode === 'LOCAL' || currentPlayer.id === myPlayerId) {
+                playSound('win'); 
+            } else {
+                playSound('lose');
+            }
+
+            document.getElementById('win-msg').innerHTML = `<span style="color:var(--p${currentPlayer.id}-color)">플레이어 ${currentPlayer.id}</span> 승리!`;
+            setTimeout(() => document.getElementById('modal-result').classList.add('active'), 500);
+            updateUI(); return;
+        }
+
+        turn = turn === 1 ? 2 : 1; updateUI();
+        if (gameMode === 'AI' && turn === 2 && gameActive) setTimeout(makeAIMove, 700);
+    }
+
+    function updateUI() {
+        document.getElementById('p1-status').textContent = `P1 남은 벽: ${p1.walls}`;
+        document.getElementById('p2-status').textContent = `P2 남은 벽: ${p2.walls}`;
+        
+        const turnInd = document.getElementById('turn-indicator');
+        if (gameMode === 'ONLINE' || gameMode === 'AI') {
+            turnInd.textContent = turn === myPlayerId ? "나의 턴!" : "상대방 턴...";
+        } else {
+            turnInd.textContent = `플레이어 ${turn} 턴`;
+        }
+        
+        if (turn === 1) {
+            document.getElementById('p1-status').classList.add('p1-active'); document.getElementById('p2-status').classList.remove('p2-active'); turnInd.className = 'turn-indicator p1-active';
+        } else {
+            document.getElementById('p2-status').classList.add('p2-active'); document.getElementById('p1-status').classList.remove('p1-active'); turnInd.className = 'turn-indicator p2-active';
+        }
+
+        document.querySelectorAll('.cell').forEach(c => c.classList.remove('valid-move'));
+        
+        // 🟢 버그 수정: 화면 하이라이트 역시 현재 턴(turn === 1)을 기준으로 정상 계산하도록 수정
+        if (gameActive && ((gameMode !== 'ONLINE' && gameMode !== 'AI') || turn === myPlayerId)) {
+            const moves = getValidMovesFor(turn === 1);
+            moves.forEach(m => gridEls[m.r * 2][m.c * 2].classList.add('valid-move'));
+        }
+    }
+
+    // ==========================================
+    // AI 로직 설계
+    // ==========================================
+    function getBestAIMove() {
+        let moves = getValidMovesFor(false); 
+        let bestMoves = [];
+        let minD = Infinity;
+
+        for(let m of moves) {
+            let origR = p2.r, origC = p2.c;
+            p2.r = m.r; p2.c = m.c;
+            let d = getDistance(p2, p2.targetRow);
+            p2.r = origR; p2.c = origC;
+
+            if (d < minD) { minD = d; bestMoves = [m]; }
+            else if (d === minD) { bestMoves.push(m); }
+        }
+        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    function getBestAIWall(exhaustive = false) {
+        let p1D = getDistance(p1, p1.targetRow);
+        let p2D = getDistance(p2, p2.targetRow);
+        let maxDiff = p1D - p2D; 
+        let candidates = [];
+
+        for(let ir=0; ir<8; ir++) {
+            for(let ic=0; ic<8; ic++) {
+                for(let type of ['H', 'V']) {
+                    if (checkWallValid(ir, ic, type, true)) {
+                        if(type === 'H') boardH[ir][ic] = true; else boardV[ir][ic] = true;
+                        let newP1D = getDistance(p1, p1.targetRow);
+                        let newP2D = getDistance(p2, p2.targetRow);
+                        if(type === 'H') boardH[ir][ic] = false; else boardV[ir][ic] = false;
+
+                        let diff = newP1D - newP2D;
+                        if (diff > maxDiff) candidates.push({ ir, ic, type, diff });
+                    }
+                }
+            }
+        }
+        if (candidates.length === 0) return null;
+        candidates.sort((a,b) => b.diff - a.diff);
+        return exhaustive ? candidates[0] : candidates[Math.floor(Math.random() * Math.min(candidates.length, 3))];
+    }
+
+    function makeAIMove() {
+        if(!gameActive) return;
+        let p1D = getDistance(p1, p1.targetRow);
+        let p2D = getDistance(p2, p2.targetRow);
+        let wallChoice = null;
+
+        if (p2.walls > 0) {
+            if (aiLevel === 'HARD') {
+                if (p1D <= p2D + 1) wallChoice = getBestAIWall(true);
+            } else if (aiLevel === 'NORMAL') {
+                if (p1D <= p2D && Math.random() > 0.4) wallChoice = getBestAIWall(false);
+            } else if (aiLevel === 'EASY') {
+                if (Math.random() > 0.8) wallChoice = getBestAIWall(false);
+            }
+        }
+
+        if (wallChoice) {
+            executeWall(-1, -1, wallChoice.type, wallChoice.ir, wallChoice.ic);
+        } else {
+            let m = getBestAIMove();
+            if(m) executeMove(m.r, m.c);
+        }
+    }
+</script>
+</body>
+</html>        .cell { background: var(--cell-bg); border-radius: 6px; position: relative; transition: background 0.2s; }
+        .cell.valid-move { cursor: pointer; box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.2); }
+        .cell.valid-move::after {
+            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px;
+            border-radius: 50%; background: rgba(255,255,255,0.5); box-shadow: 0 0 10px rgba(255,255,255,0.8); pointer-events: none;
+        }
+        .cell.valid-move:hover { background: var(--cell-hover); }
+        .h-edge, .v-edge { background: transparent; transition: background 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .intersection { background: transparent; pointer-events: none; }
+        .wall-placed { background: var(--wall-placed); box-shadow: var(--wall-glow); z-index: 5; border-radius: 2px; }
+        .wall-hover-valid { background: var(--wall-hover-valid); }
+        .wall-hover-invalid { background: var(--wall-hover-invalid); }
+
+        .pawn {
+            position: absolute; width: var(--p-size); height: var(--p-size); border-radius: 50%; top: 0; left: 0;
+            transform: translate(
+                calc(var(--c) * (var(--c-size) + var(--w-size)) + (var(--c-size) - var(--p-size)) / 2),
+                calc(var(--r) * (var(--c-size) + var(--w-size)) + (var(--c-size) - var(--p-size)) / 2)
+            );
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 10;
+        }
+        .pawn.p1 { background: var(--p1-color); box-shadow: var(--p1-glow); border: 2px solid #fff; }
+        .pawn.p2 { background: var(--p2-color); box-shadow: var(--p2-glow); border: 2px solid #fff; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8);
+            display: flex; justify-content: center; align-items: center; z-index: 100;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(5px);
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        /* 튜토리얼 요소 */
+        .tutorial-stage {
+            position: relative; width: 100%; max-width: 800px; height: 500px; 
+            background: #111; border-radius: 15px; border: 2px solid #333; overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+        }
+        .tut-text { position: absolute; top: 30px; left: 0; width: 100%; text-align: center; font-size: 1.8rem; font-weight: 900; color: var(--p1-color); z-index: 10; text-shadow: 0 2px 10px rgba(0,229,255,0.5);}
+        .tut-subtext { position: absolute; top: 80px; left: 0; width: 100%; text-align: center; font-size: 1.1rem; color: #ccc; z-index: 10; line-height: 1.5;}
+        #tut-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 5; pointer-events: none; }
+        .tut-bg {
+            position: absolute; top: 150px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px;
+            background-image: linear-gradient(#333 2px, transparent 2px), linear-gradient(90deg, #333 2px, transparent 2px);
+            background-size: 60px 60px; background-position: -2px -2px; border: 2px solid #555; border-radius: 5px;
+        }
+        .tut-pawn {
+            position: absolute; width: 34px; height: 34px; border-radius: 50%; 
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); border: 2px solid #fff;
+        }
+        .tut-pawn.p1 { background: var(--p1-color); box-shadow: var(--p1-glow); }
+        .tut-pawn.p2 { background: var(--p2-color); box-shadow: var(--p2-glow); }
+        .tut-wall {
+            position: absolute; background: var(--wall-placed); box-shadow: var(--wall-glow);
+            border-radius: 2px; transition: all 0.4s ease; opacity: 0; transform: scale(0.5);
+        }
+        .tut-wall.active { opacity: 1; transform: scale(1); }
+        .tut-wall.invalid { background: var(--p2-color); box-shadow: var(--p2-glow); }
+        .tut-target-line {
+            position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 10px; background: rgba(0, 229, 255, 0.3); box-shadow: 0 0 15px var(--p1-color);
+            border-radius: 5px; opacity: 0; transition: opacity 0.5s;
+        }
+        .tut-controls { margin-top: 20px; display: flex; gap: 20px; }
+
+        @media (max-width: 600px) {
+            .tutorial-stage { height: 400px; }
+            .tut-text { font-size: 1.4rem; top: 20px; }
+            .tut-subtext { font-size: 0.95rem; top: 60px; padding: 0 10px; }
+            .tut-bg { width: 250px; height: 250px; background-size: 50px 50px; top: 130px; }
+            .tut-target-line { width: 250px; top: 130px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 메인 메뉴 화면 -->
+    <div id="screen-menu" class="screen active">
+        <h1 class="title">Gworeedo<br><span style="font-size:1.2rem; color:#aaa; font-weight:normal;">Board Game</span></h1>
+        <button class="btn btn-primary" onclick="showAiMenu()">싱글 플레이 (AI 대전)</button>
+        <button class="btn" onclick="startLocalGame()">로컬 플레이 (1기기 2인용)</button>
+        <button class="btn" onclick="showScreen('screen-online')">온라인 매칭 (방 만들기/접속)</button>
+        <button class="btn" style="background:transparent; border-color:#555;" onclick="startTutorial()">모션 그래픽 튜토리얼</button>
+    </div>
+
+    <!-- 2. AI 난이도 선택 화면 -->
+    <div id="screen-ai-menu" class="screen">
+        <h1 class="title" style="font-size: 2.5rem;">AI 난이도 선택</h1>
+        <button class="btn" style="border-color:#2ecc71; color:#2ecc71;" onclick="startAIGame('EASY')">EASY (초보자)</button>
+        <button class="btn" style="border-color:#f1c40f; color:#f1c40f;" onclick="startAIGame('NORMAL')">NORMAL (숙련자)</button>
+        <button class="btn" style="border-color:#e74c3c; color:#e74c3c;" onclick="startAIGame('HARD')">HARD (마스터)</button>
+        <button class="btn" style="background:transparent; border-color:#555; margin-top: 20px;" onclick="showScreen('screen-menu')">뒤로가기</button>
+    </div>
+
+    <!-- 3. 온라인 로비 화면 -->
+    <div id="screen-online" class="screen">
+        <div class="panel">
+            <h2>온라인 대전</h2>
+            <p style="color:#aaa; font-size:0.9rem; margin-bottom:30px;">코드를 공유하여 친구와 함께하세요.</p>
+            <button class="btn btn-primary" style="width:100%;" onclick="createRoom()">방 만들기 (P1)</button>
+            <div id="room-info" style="display:none; margin: 20px 0;">
+                <p>상대방에게 아래 코드를 알려주세요:</p>
+                <h1 id="room-id-display" style="color:var(--p1-color); letter-spacing:3px; user-select:text;">-</h1>
+                <p style="font-size: 0.8rem; color: #888;">상대방 연결 대기중...</p>
+            </div>
+            <hr style="border-color:#333; margin: 30px 0;">
+            <input type="text" id="join-id-input" placeholder="방 코드 입력" maxlength="5">
+            <button class="btn" style="width:100%;" onclick="joinRoom()">방 접속하기 (P2)</button>
+            <p id="join-status" style="color:var(--p2-color); font-size:0.9rem; margin-top:10px;"></p>
+            <button class="btn" style="width:100%; margin-top: 20px; border:none; background:transparent;" onclick="exitGame()">뒤로가기</button>
+        </div>
+    </div>
+
+    <!-- 4. 게임 화면 -->
+    <div id="screen-game" class="screen">
+        <h1 class="title" style="font-size: 2rem; margin-bottom:10px;">Gworeedo</h1>
+        <div id="role-indicator">로컬 2인용 모드</div>
+        
+        <div class="status-panel">
+            <div id="p2-status" class="player-status">P2 남은 벽: 10</div>
+            <div id="turn-indicator" class="turn-indicator p1-active">플레이어 1 턴</div>
+            <div id="p1-status" class="player-status p1-active">P1 남은 벽: 10</div>
+        </div>
+
+        <div class="board-wrapper">
+            <div id="board" class="board">
                 <div id="pawn1" class="pawn p1" style="--r: 8; --c: 4;"></div>
                 <div id="pawn2" class="pawn p2" style="--r: 0; --c: 4;"></div>
             </div>
