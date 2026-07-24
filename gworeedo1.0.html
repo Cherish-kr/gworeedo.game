@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>궈리도 (Gworeedo) - 멀티플레이</title>
+    <!-- WebRTC 기반 P2P 통신을 위한 PeerJS 라이브러리 -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+        :root {
+            --bg-color: #0f1015;
+            --panel-bg: rgba(30, 30, 35, 0.8);
+            --board-bg: #1a1b22;
+            --cell-bg: #292b36;
+            --cell-hover: #3d4050;
+            --p1-color: #00e5ff;
+            --p2-color: #ff007f;
+            --p1-glow: 0 0 15px rgba(0, 229, 255, 0.8), inset 0 0 10px rgba(0, 0, 0, 0.5);
+            --p2-glow: 0 0 15px rgba(255, 0, 127, 0.8), inset 0 0 10px rgba(0, 0, 0, 0.5);
+            --wall-placed: #ffd700;
+            --wall-glow: 0 0 10px #ffd700, 0 0 20px rgba(255, 215, 0, 0.4);
+            --wall-hover-valid: rgba(255, 215, 0, 0.5);
+            --wall-hover-invalid: rgba(255, 50, 50, 0.6);
+            
+            --c-size: 50px;
+            --w-size: 15px;
+            --p-size: 34px;
+        }
+
+        @media (max-width: 600px) {
+            :root { --c-size: 35px; --w-size: 10px; --p-size: 24px; }
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: var(--bg-color);
+            color: #fff;
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 100vh; overflow: hidden; user-select: none;
+        }
+
+        /* 공통 스크린 UI */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
+            z-index: 10;
+        }
+        .screen.active { opacity: 1; pointer-events: auto; z-index: 20; }
+
+        h1.title {
+            font-size: 3.5rem; font-weight: 900; letter-spacing: 2px;
+            margin-bottom: 40px; text-transform: uppercase;
+            background: linear-gradient(45deg, var(--p1-color), var(--p2-color));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 5px 20px rgba(255,255,255,0.1);
+        }
+
+        /* 버튼 및 패널 스타일 */
+        .btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff; padding: 15px 40px;
+            font-size: 1.2rem; font-weight: 700; border-radius: 12px;
+            cursor: pointer; transition: all 0.2s ease;
+            width: 280px; margin-bottom: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .btn-primary { background: linear-gradient(45deg, var(--p1-color), var(--p2-color)); border: none; font-weight: 900; }
+        .btn-primary:hover { opacity: 0.9; box-shadow: 0 10px 30px rgba(255, 0, 127, 0.4); }
+
+        .panel {
+            background: var(--panel-bg); padding: 40px;
+            border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            text-align: center; width: 90%; max-width: 400px;
+        }
+        .panel input {
+            width: 100%; padding: 15px; margin-bottom: 20px;
+            background: #111; border: 1px solid #444; color: #fff;
+            border-radius: 8px; font-size: 1.2rem; text-align: center;
+            outline: none; font-weight: bold; text-transform: uppercase;
+        }
+        .panel input:focus { border-color: var(--p1-color); }
+
+        /* 게임 보드 UI */
+        .status-panel {
+            display: flex; justify-content: space-between; align-items: center;
+            width: calc(9 * var(--c-size) + 8 * var(--w-size));
+            margin-bottom: 20px; padding: 15px;
+            background: var(--panel-bg); border-radius: 12px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .player-status { font-weight: 700; font-size: 0.9rem; padding: 8px 12px; border-radius: 8px; }
+        .p1-active { color: var(--p1-color); text-shadow: 0 0 8px var(--p1-color); }
+        .p2-active { color: var(--p2-color); text-shadow: 0 0 8px var(--p2-color); }
+        .turn-indicator { font-size: 1.2rem; font-weight: 900; transition: color 0.3s ease; }
+        
+        #role-indicator { font-size: 0.85rem; color: #aaa; margin-bottom: 10px; font-weight: bold; }
+
+        .board-wrapper {
+            position: relative; background: var(--board-bg);
+            padding: 10px; border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0,0,0,0.5);
+            border: 2px solid #333;
+        }
+        .board {
+            display: grid; position: relative;
+            width: calc(9 * var(--c-size) + 8 * var(--w-size));
+            height: calc(9 * var(--c-size) + 8 * var(--w-size));
+            grid-template-columns: repeat(8, var(--c-size) var(--w-size)) var(--c-size);
+            grid-template-rows: repeat(8, var(--c-size) var(--w-size)) var(--c-size);
+        }
+
+        /* 그리드 요소 */
+        .cell { background: var(--cell-bg); border-radius: 6px; position: relative; transition: background 0.2s; }
+        .cell.valid-move { cursor: pointer; box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.2); }
+        .cell.valid-move::after {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); width: 12px; height: 12px;
+            border-radius: 50%; background: rgba(255,255,255,0.5);
+            box-shadow: 0 0 10px rgba(255,255,255,0.8); pointer-events: none;
+        }
+        .cell.valid-move:hover { background: var(--cell-hover); }
+        .h-edge, .v-edge { background: transparent; transition: background 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .intersection { background: transparent; pointer-events: none; }
+
+        /* 벽 */
+        .wall-placed { background: var(--wall-placed); box-shadow: var(--wall-glow); z-index: 5; border-radius: 2px; }
+        .wall-hover-valid { background: var(--wall-hover-valid); }
+        .wall-hover-invalid { background: var(--wall-hover-invalid); }
+
+        /* 폰 */
+        .pawn {
+            position: absolute; width: var(--p-size); height: var(--p-size); border-radius: 50%; top: 0; left: 0;
+            transform: translate(
+                calc(var(--c) * (var(--c-size) + var(--w-size)) + (var(--c-size) - var(--p-size)) / 2),
+                calc(var(--r) * (var(--c-size) + var(--w-size)) + (var(--c-size) - var(--p-size)) / 2)
+            );
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 10;
+        }
+        .pawn.p1 { background: var(--p1-color); box-shadow: var(--p1-glow); border: 2px solid #fff; }
+        .pawn.p2 { background: var(--p2-color); box-shadow: var(--p2-glow); border: 2px solid #fff; }
+
+        /* 모달창 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8);
+            display: flex; justify-content: center; align-items: center; z-index: 100;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(5px);
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        
+        .rules-content { text-align: left; line-height: 1.6; font-size: 0.95rem; color: #ddd; margin-bottom: 20px;}
+        .rules-content p { margin: 5px 0;}
+    </style>
+</head>
+<body>
+
+    <!-- 1. 메인 메뉴 화면 -->
+    <div id="screen-menu" class="screen active">
+        <h1 class="title">Gworeedo</h1>
+        <button class="btn" onclick="startLocalGame()">로컬 플레이 (1기기 2인용)</button>
+        <button class="btn btn-primary" onclick="showScreen('screen-online')">온라인 매칭 (방 만들기/접속)</button>
+        <button class="btn" onclick="document.getElementById('modal-rules').classList.add('active')">게임 하는 방법</button>
+    </div>
+
+    <!-- 2. 온라인 로비 화면 -->
+    <div id="screen-online" class="screen">
+        <div class="panel">
+            <h2>온라인 대전</h2>
+            <p style="color:#aaa; font-size:0.9rem; margin-bottom:30px;">코드를 공유하여 친구와 함께하세요.</p>
+            
+            <button class="btn btn-primary" style="width:100%;" onclick="createRoom()">방 만들기 (P1)</button>
+            <div id="room-info" style="display:none; margin: 20px 0;">
+                <p>상대방에게 아래 코드를 알려주세요:</p>
+                <h1 id="room-id-display" style="color:var(--p1-color); letter-spacing:3px; user-select:text;">-</h1>
+                <p style="font-size: 0.8rem; color: #888;">상대방 연결 대기중...</p>
+            </div>
+            
+            <hr style="border-color:#333; margin: 30px 0;">
+            
+            <input type="text" id="join-id-input" placeholder="방 코드 입력" maxlength="5">
+            <button class="btn" style="width:100%;" onclick="joinRoom()">방 접속하기 (P2)</button>
+            <p id="join-status" style="color:var(--p2-color); font-size:0.9rem; margin-top:10px;"></p>
+
+            <button class="btn" style="width:100%; margin-top: 20px; border:none; background:transparent;" onclick="showScreen('screen-menu')">뒤로가기</button>
+        </div>
+    </div>
+
+    <!-- 3. 게임 화면 -->
+    <div id="screen-game" class="screen">
+        <h1 class="title" style="font-size: 2rem; margin-bottom:10px;">Gworeedo</h1>
+        <div id="role-indicator">로컬 2인용 모드</div>
+        
+        <div class="status-panel">
+            <div id="p2-status" class="player-status">P2 남은 벽: 10</div>
+            <div id="turn-indicator" class="turn-indicator p1-active">플레이어 1 턴</div>
+            <div id="p1-status" class="player-status p1-active">P1 남은 벽: 10</div>
+        </div>
+
+        <div class="board-wrapper">
+            <div id="board" class="board">
+                <div id="pawn1" class="pawn p1" style="--r: 8; --c: 4;"></div>
+                <div id="pawn2" class="pawn p2" style="--r: 0; --c: 4;"></div>
+            </div>
+        </div>
+        <button class="btn" style="margin-top:20px; padding: 10px 20px;" onclick="exitGame()">게임 종료</button>
+    </div>
+
+    <!-- 룰 모달 -->
+    <div id="modal-rules" class="modal-overlay">
+        <div class="panel" style="max-width: 500px;">
+            <h2 style="margin-top:0; color:var(--p1-color)">게임 방법</h2>
+            <div class="rules-content">
+                <p><b>목표:</b> 자신의 말을 반대편 끝 줄(아무 칸이나)에 먼저 도달시키는 사람이 승리합니다.</p>
+                <p><b>턴 진행:</b> 자신의 턴에 <b>'말을 1칸 이동'</b>하거나 <b>'벽을 1개 설치'</b>할 수 있습니다.</p>
+                <hr style="border-color:#333; margin:15px 0;">
+                <p><b>말 이동 규칙 (점프 룰):</b></p>
+                <p>- 상하좌우 1칸씩 이동 가능합니다 (벽으로 막힌 곳 제외).</p>
+                <p>- 상대방 말과 마주친 경우 <b>뛰어넘을 수 있습니다(직선 점프).</b></p>
+                <p>- 상대방 말 뒤에 벽이 있거나 맵 끝이라 직선으로 넘을 수 없는 경우, 상대방 말의 <b>양 옆으로 대각선 점프</b>가 가능합니다.</p>
+                <hr style="border-color:#333; margin:15px 0;">
+                <p><b>벽 설치 규칙:</b></p>
+                <p>- 벽은 2칸의 길이를 가지며 타일 사이에 설치합니다.</p>
+                <p>- 남은 벽 갯수(시작 시 10개)가 있어야 설치 가능합니다.</p>
+                <p>- <b>중요:</b> 상대방이나 자신이 목표 지점으로 가는 <b>길을 아예 막아버리는 벽은 설치할 수 없습니다.</b> (자동 차단됨)</p>
+            </div>
+            <button class="btn btn-primary" style="width:100%; margin-bottom:0;" onclick="document.getElementById('modal-rules').classList.remove('active')">닫기</button>
+        </div>
+    </div>
+
+    <!-- 결과 모달 -->
+    <div id="modal-result" class="modal-overlay">
+        <div class="panel">
+            <h2 id="win-msg" style="font-size: 2.5rem; margin: 0 0 20px;">승리!</h2>
+            <button class="btn btn-primary" onclick="exitGame()">메인으로</button>
+        </div>
+    </div>
+
+<script>
+    // ==========================================
+    // UI 스크린 제어
+    // ==========================================
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    // ==========================================
+    // 네트워크 (WebRTC PeerJS) 로직
+    // ==========================================
+    let peer = null;
+    let conn = null;
+    let isOnline = false;
+    let myPlayerId = 0; // 0: 로컬, 1: P1(호스트), 2: P2(게스트)
+    const APP_PREFIX = 'gwo-';
+
+    // 5자리 랜덤 방 코드 생성
+    const generateShortId = () => Math.random().toString(36).substring(2, 7).toUpperCase();
+
+    function createRoom() {
+        const shortId = generateShortId();
+        const fullId = APP_PREFIX + shortId;
+        
+        document.getElementById('room-info').style.display = 'block';
+        document.getElementById('room-id-display').innerText = '생성중...';
+
+        peer = new Peer(fullId);
+        
+        peer.on('open', id => {
+            document.getElementById('room-id-display').innerText = shortId;
+        });
+
+        peer.on('connection', connection => {
+            conn = connection;
+            setupConnection(1); // 호스트는 P1
+        });
+
+        peer.on('error', err => {
+            alert('방 생성 오류: ' + err.type);
+            document.getElementById('room-info').style.display = 'none';
+        });
+    }
+
+    function joinRoom() {
+        const shortId = document.getElementById('join-id-input').value.trim().toUpperCase();
+        if(shortId.length !== 5) { alert('5자리 방 코드를 입력하세요.'); return; }
+        
+        const fullId = APP_PREFIX + shortId;
+        document.getElementById('join-status').innerText = '접속 시도중...';
+        
+        peer = new Peer();
+        peer.on('open', () => {
+            conn = peer.connect(fullId, { reliable: true });
+            
+            conn.on('open', () => {
+                setupConnection(2); // 게스트는 P2
+            });
+            
+            conn.on('error', () => {
+                document.getElementById('join-status').innerText = '연결 실패.';
+            });
+        });
+        
+        peer.on('error', err => {
+            document.getElementById('join-status').innerText = '오류: 방을 찾을 수 없습니다.';
+        });
+    }
+
+    function setupConnection(role) {
+        isOnline = true;
+        myPlayerId = role;
+        
+        conn.on('data', data => {
+            // 네트워크로부터 액션 수신
+            if(data.action === 'MOVE') executeMove(data.r, data.c);
+            if(data.action === 'WALL') executeWall(data.gridR, data.gridC, data.type, data.ir, data.ic);
+        });
+
+        conn.on('close', () => {
+            alert('상대방과 연결이 끊어졌습니다.');
+            exitGame();
+        });
+
+        startNetworkGame();
+    }
+
+    function exitGame() {
+        if(conn) { conn.close(); conn = null; }
+        if(peer) { peer.destroy(); peer = null; }
+        isOnline = false; myPlayerId = 0;
+        document.getElementById('room-info').style.display = 'none';
+        document.getElementById('join-status').innerText = '';
+        document.getElementById('join-id-input').value = '';
+        document.getElementById('modal-result').classList.remove('active');
+        showScreen('screen-menu');
+    }
+
+    function startLocalGame() {
+        isOnline = false;
+        myPlayerId = 0;
+        document.getElementById('role-indicator').innerText = '로컬 2인용 모드';
+        initGame();
+        showScreen('screen-game');
+    }
+
+    function startNetworkGame() {
+        document.getElementById('role-indicator').innerHTML = 
+            `나: <span style="color:var(--p${myPlayerId}-color)">Player ${myPlayerId}</span> / 온라인 매치`;
+        initGame();
+        showScreen('screen-game');
+    }
+
+    // ==========================================
+    // 게임 코어 로직 (17x17 Grid & BFS)
+    // ==========================================
+    let p1, p2, turn, gameActive;
+    let boardH, boardV; 
+    const boardEl = document.getElementById('board');
+    let gridEls = []; 
+
+    function initGame() {
+        p1 = { id: 1, r: 8, c: 4, walls: 10, targetRow: 0 };
+        p2 = { id: 2, r: 0, c: 4, walls: 10, targetRow: 8 };
+        turn = 1; gameActive = true;
+        boardH = Array.from({length: 8}, () => Array(8).fill(false));
+        boardV = Array.from({length: 8}, () => Array(8).fill(false));
+
+        document.getElementById('modal-result').classList.remove('active');
+        buildGrid();
+        updateUI();
+    }
+
+    function buildGrid() {
+        const pawn1 = document.getElementById('pawn1');
+        const pawn2 = document.getElementById('pawn2');
+        boardEl.innerHTML = '';
+        boardEl.appendChild(pawn1); boardEl.appendChild(pawn2);
+        gridEls = Array.from({length: 17}, () => Array(17).fill(null));
+
+        for (let r = 0; r < 17; r++) {
+            for (let c = 0; c < 17; c++) {
+                const el = document.createElement('div');
+                if (r % 2 === 0 && c % 2 === 0) {
+                    el.className = 'cell';
+                    el.addEventListener('click', () => attemptMove(r/2, c/2));
+                } else if (r % 2 === 1 && c % 2 === 0) {
+                    el.className = 'h-edge';
+                    el.addEventListener('mouseenter', () => handleWallHover(r, c, 'H'));
+                    el.addEventListener('mouseleave', () => clearWallHover());
+                    el.addEventListener('click', () => attemptWall(r, c, 'H'));
+                } else if (r % 2 === 0 && c % 2 === 1) {
+                    el.className = 'v-edge';
+                    el.addEventListener('mouseenter', () => handleWallHover(r, c, 'V'));
+                    el.addEventListener('mouseleave', () => clearWallHover());
+                    el.addEventListener('click', () => attemptWall(r, c, 'V'));
+                } else {
+                    el.className = 'intersection';
+                }
+                boardEl.appendChild(el);
+                gridEls[r][c] = el;
+            }
+        }
+    }
+
+    const isHWall = (ir, ic) => (ir >= 0 && ir < 8 && ic >= 0 && ic < 8) ? boardH[ir][ic] : false;
+    const isVWall = (ir, ic) => (ir >= 0 && ir < 8 && ic >= 0 && ic < 8) ? boardV[ir][ic] : false;
+    const hasHWallAbove = (r, c) => isHWall(r-1, c) || isHWall(r-1, c-1);
+    const hasHWallBelow = (r, c) => isHWall(r, c) || isHWall(r, c-1);
+    const hasVWallLeft = (r, c) => isVWall(r, c-1) || isVWall(r-1, c-1);
+    const hasVWallRight = (r, c) => isVWall(r, c) || isVWall(r-1, c);
+
+    // BFS 길찾기 (벽 설치 시 차단 여부 검증용)
+    function canReachTarget(player, targetRow) {
+        let q = [{r: player.r, c: player.c}];
+        let visited = Array.from({length: 9}, () => Array(9).fill(false));
+        visited[player.r][player.c] = true;
+        let head = 0;
+
+        while (head < q.length) {
+            let {r, c} = q[head++];
+            if (r === targetRow) return true;
+            if (r > 0 && !hasHWallAbove(r, c) && !visited[r-1][c]) { visited[r-1][c] = true; q.push({r: r-1, c}); }
+            if (r < 8 && !hasHWallBelow(r, c) && !visited[r+1][c]) { visited[r+1][c] = true; q.push({r: r+1, c}); }
+            if (c > 0 && !hasVWallLeft(r, c) && !visited[r][c-1]) { visited[r][c-1] = true; q.push({r, c: c-1}); }
+            if (c < 8 && !hasVWallRight(r, c) && !visited[r][c+1]) { visited[r][c+1] = true; q.push({r, c: c+1}); }
+        }
+        return false;
+    }
+
+    function getLogicalWallCoords(gridR, gridC, type) {
+        let ir = type === 'H' ? (gridR - 1) / 2 : Math.min(gridR / 2, 7);
+        let ic = type === 'H' ? Math.min(gridC / 2, 7) : (gridC - 1) / 2;
+        return {ir, ic};
+    }
+
+    function checkWallValid(ir, ic, type) {
+        let cp = turn === 1 ? p1 : p2;
+        if (cp.walls <= 0) return false;
+        if (ir < 0 || ir > 7 || ic < 0 || ic > 7) return false;
+
+        if (type === 'H') {
+            if (boardH[ir][ic] || boardV[ir][ic] || (ic > 0 && boardH[ir][ic-1]) || (ic < 7 && boardH[ir][ic+1])) return false;
+            boardH[ir][ic] = true;
+            let valid = canReachTarget(p1, p1.targetRow) && canReachTarget(p2, p2.targetRow);
+            boardH[ir][ic] = false;
+            return valid;
+        } else {
+            if (boardV[ir][ic] || boardH[ir][ic] || (ir > 0 && boardV[ir-1][ic]) || (ir < 7 && boardV[ir+1][ic])) return false;
+            boardV[ir][ic] = true;
+            let valid = canReachTarget(p1, p1.targetRow) && canReachTarget(p2, p2.targetRow);
+            boardV[ir][ic] = false;
+            return valid;
+        }
+    }
+
+    function getValidMoves() {
+        let moves = [];
+        let cp = turn === 1 ? p1 : p2;
+        let op = turn === 1 ? p2 : p1;
+        let r = cp.r, c = cp.c;
+        const addMove = (nr, nc) => { if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) moves.push({r: nr, c: nc}); };
+
+        // 상
+        if (r > 0 && !hasHWallAbove(r, c)) {
+            if (op.r === r-1 && op.c === c) {
+                if (r-1 > 0 && !hasHWallAbove(r-1, c)) addMove(r-2, c); // 직선점프
+                else { // 대각선점프
+                    if (c > 0 && !hasVWallLeft(r-1, c)) addMove(r-1, c-1);
+                    if (c < 8 && !hasVWallRight(r-1, c)) addMove(r-1, c+1);
+                }
+            } else addMove(r-1, c);
+        }
+        // 하
+        if (r < 8 && !hasHWallBelow(r, c)) {
+            if (op.r === r+1 && op.c === c) {
+                if (r+1 < 8 && !hasHWallBelow(r+1, c)) addMove(r+2, c);
+                else {
+                    if (c > 0 && !hasVWallLeft(r+1, c)) addMove(r+1, c-1);
+                    if (c < 8 && !hasVWallRight(r+1, c)) addMove(r+1, c+1);
+                }
+            } else addMove(r+1, c);
+        }
+        // 좌
+        if (c > 0 && !hasVWallLeft(r, c)) {
+            if (op.r === r && op.c === c-1) {
+                if (c-1 > 0 && !hasVWallLeft(r, c-1)) addMove(r, c-2);
+                else {
+                    if (r > 0 && !hasHWallAbove(r, c-1)) addMove(r-1, c-1);
+                    if (r < 8 && !hasHWallBelow(r, c-1)) addMove(r+1, c-1);
+                }
+            } else addMove(r, c-1);
+        }
+        // 우
+        if (c < 8 && !hasVWallRight(r, c)) {
+            if (op.r === r && op.c === c+1) {
+                if (c+1 < 8 && !hasVWallRight(r, c+1)) addMove(r, c+2);
+                else {
+                    if (r > 0 && !hasHWallAbove(r, c+1)) addMove(r-1, c+1);
+                    if (r < 8 && !hasHWallBelow(r, c+1)) addMove(r+1, c+1);
+                }
+            } else addMove(r, c+1);
+        }
+        return moves;
+    }
+
+    // ==========================================
+    // 액션 핸들러 (입력 -> 네트워크 송신 -> 실행)
+    // ==========================================
+    function attemptMove(r, c) {
+        if (!gameActive) return;
+        if (isOnline && turn !== myPlayerId) return; // 온라인일땐 내 턴에만 작동
+        
+        const moves = getValidMoves();
+        if (moves.some(m => m.r === r && m.c === c)) {
+            if (isOnline) conn.send({ action: 'MOVE', r, c });
+            executeMove(r, c);
+        }
+    }
+
+    function executeMove(r, c) {
+        let cp = turn === 1 ? p1 : p2;
+        cp.r = r; cp.c = c;
+        endTurn(cp);
+    }
+
+    let currentWallHover = [];
+    function handleWallHover(gridR, gridC, type) {
+        if (!gameActive || (isOnline && turn !== myPlayerId)) return;
+        let cp = turn === 1 ? p1 : p2;
+        if (cp.walls === 0) return;
+        
+        clearWallHover();
+        const {ir, ic} = getLogicalWallCoords(gridR, gridC, type);
+        const isValid = checkWallValid(ir, ic, type);
+        const cls = isValid ? 'wall-hover-valid' : 'wall-hover-invalid';
+
+        if (type === 'H') currentWallHover = [gridEls[ir*2+1][ic*2], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+1][ic*2+2]];
+        else currentWallHover = [gridEls[ir*2][ic*2+1], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+2][ic*2+1]];
+
+        currentWallHover.forEach(el => el && el.classList.add(cls));
+    }
+
+    function clearWallHover() {
+        currentWallHover.forEach(el => {
+            if (el) { el.classList.remove('wall-hover-valid', 'wall-hover-invalid'); }
+        });
+        currentWallHover = [];
+    }
+
+    function attemptWall(gridR, gridC, type) {
+        if (!gameActive) return;
+        if (isOnline && turn !== myPlayerId) return;
+        
+        const {ir, ic} = getLogicalWallCoords(gridR, gridC, type);
+        if (checkWallValid(ir, ic, type)) {
+            if (isOnline) conn.send({ action: 'WALL', gridR, gridC, type, ir, ic });
+            executeWall(gridR, gridC, type, ir, ic);
+        }
+    }
+
+    function executeWall(gridR, gridC, type, ir, ic) {
+        if (type === 'H') boardH[ir][ic] = true;
+        else boardV[ir][ic] = true;
+        
+        let cp = turn === 1 ? p1 : p2;
+        cp.walls--;
+        
+        // 시각적 업데이트 (수신받은 쪽은 currentWallHover가 없으므로 계산해서 렌더링)
+        let elements = [];
+        if (type === 'H') elements = [gridEls[ir*2+1][ic*2], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+1][ic*2+2]];
+        else elements = [gridEls[ir*2][ic*2+1], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+2][ic*2+1]];
+        
+        elements.forEach(el => {
+            if (el) { el.classList.remove('wall-hover-valid', 'wall-hover-invalid'); el.classList.add('wall-placed'); }
+        });
+        clearWallHover();
+        endTurn(cp);
+    }
+
+    function endTurn(currentPlayer) {
+        const pawnEl = turn === 1 ? document.getElementById('pawn1') : document.getElementById('pawn2');
+        pawnEl.style.setProperty('--r', currentPlayer.r);
+        pawnEl.style.setProperty('--c', currentPlayer.c);
+
+        if (currentPlayer.r === currentPlayer.targetRow) {
+            gameActive = false;
+            document.getElementById('win-msg').innerHTML = `<span style="color:var(--p${currentPlayer.id}-color)">플레이어 ${currentPlayer.id}</span> 승리!`;
+            setTimeout(() => document.getElementById('modal-result').classList.add('active'), 500);
+            updateUI(); return;
+        }
+
+        turn = turn === 1 ? 2 : 1;
+        updateUI();
+    }
+
+    function updateUI() {
+        document.getElementById('p1-status').textContent = `P1 남은 벽: ${p1.walls}`;
+        document.getElementById('p2-status').textContent = `P2 남은 벽: ${p2.walls}`;
+        
+        const turnInd = document.getElementById('turn-indicator');
+        if (isOnline && myPlayerId !== 0) {
+            turnInd.textContent = turn === myPlayerId ? "나의 턴!" : "상대방 턴...";
+        } else {
+            turnInd.textContent = `플레이어 ${turn} 턴`;
+        }
+        
+        if (turn === 1) {
+            document.getElementById('p1-status').classList.add('p1-active');
+            document.getElementById('p2-status').classList.remove('p2-active');
+            turnInd.className = 'turn-indicator p1-active';
+        } else {
+            document.getElementById('p2-status').classList.add('p2-active');
+            document.getElementById('p1-status').classList.remove('p1-active');
+            turnInd.className = 'turn-indicator p2-active';
+        }
+
+        document.querySelectorAll('.cell').forEach(c => c.classList.remove('valid-move'));
+
+        // 내 턴이거나 로컬 게임일 때만 이동 가능 마커 표시
+        if (gameActive && (!isOnline || turn === myPlayerId)) {
+            const moves = getValidMoves();
+            moves.forEach(m => gridEls[m.r * 2][m.c * 2].classList.add('valid-move'));
+        }
+    }
+</script>
+</body>
+</html>
