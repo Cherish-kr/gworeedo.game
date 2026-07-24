@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>궈리도 (Gworeedo) - 멀티플레이</title>
-    <!-- WebRTC 기반 P2P 통신을 위한 PeerJS 라이브러리 -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
@@ -47,58 +46,44 @@
 
         /* 공통 스크린 UI */
         .screen {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
-            z-index: 10;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.4s ease; z-index: 10;
         }
         .screen.active { opacity: 1; pointer-events: auto; z-index: 20; }
 
         h1.title {
-            font-size: 3.5rem; font-weight: 900; letter-spacing: 2px;
-            margin-bottom: 40px; text-transform: uppercase;
+            font-size: 3.5rem; font-weight: 900; letter-spacing: 2px; margin-bottom: 40px; text-transform: uppercase;
             background: linear-gradient(45deg, var(--p1-color), var(--p2-color));
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            text-shadow: 0 5px 20px rgba(255,255,255,0.1);
+            text-shadow: 0 5px 20px rgba(255,255,255,0.1); text-align: center; line-height: 1.2;
         }
 
         /* 버튼 및 패널 스타일 */
         .btn {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #fff; padding: 15px 40px;
-            font-size: 1.2rem; font-weight: 700; border-radius: 12px;
-            cursor: pointer; transition: all 0.2s ease;
-            width: 280px; margin-bottom: 15px;
-            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            color: #fff; padding: 15px 40px; font-size: 1.2rem; font-weight: 700; border-radius: 12px;
+            cursor: pointer; transition: all 0.2s ease; width: 300px; margin-bottom: 15px; backdrop-filter: blur(10px);
         }
         .btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
         .btn-primary { background: linear-gradient(45deg, var(--p1-color), var(--p2-color)); border: none; font-weight: 900; }
         .btn-primary:hover { opacity: 0.9; box-shadow: 0 10px 30px rgba(255, 0, 127, 0.4); }
 
         .panel {
-            background: var(--panel-bg); padding: 40px;
-            border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-            text-align: center; width: 90%; max-width: 400px;
+            background: var(--panel-bg); padding: 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8); text-align: center; width: 90%; max-width: 400px;
         }
         .panel input {
-            width: 100%; padding: 15px; margin-bottom: 20px;
-            background: #111; border: 1px solid #444; color: #fff;
-            border-radius: 8px; font-size: 1.2rem; text-align: center;
-            outline: none; font-weight: bold; text-transform: uppercase;
+            width: 100%; padding: 15px; margin-bottom: 20px; background: #111; border: 1px solid #444; color: #fff;
+            border-radius: 8px; font-size: 1.2rem; text-align: center; outline: none; font-weight: bold; text-transform: uppercase;
         }
         .panel input:focus { border-color: var(--p1-color); }
 
         /* 게임 보드 UI */
         .status-panel {
             display: flex; justify-content: space-between; align-items: center;
-            width: calc(9 * var(--c-size) + 8 * var(--w-size));
-            margin-bottom: 20px; padding: 15px;
-            background: var(--panel-bg); border-radius: 12px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+            width: calc(9 * var(--c-size) + 8 * var(--w-size)); margin-bottom: 20px; padding: 15px;
+            background: var(--panel-bg); border-radius: 12px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .player-status { font-weight: 700; font-size: 0.9rem; padding: 8px 12px; border-radius: 8px; }
@@ -109,10 +94,8 @@
         #role-indicator { font-size: 0.85rem; color: #aaa; margin-bottom: 10px; font-weight: bold; }
 
         .board-wrapper {
-            position: relative; background: var(--board-bg);
-            padding: 10px; border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0,0,0,0.5);
-            border: 2px solid #333;
+            position: relative; background: var(--board-bg); padding: 10px; border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0,0,0,0.5); border: 2px solid #333;
         }
         .board {
             display: grid; position: relative;
@@ -126,10 +109,8 @@
         .cell { background: var(--cell-bg); border-radius: 6px; position: relative; transition: background 0.2s; }
         .cell.valid-move { cursor: pointer; box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.2); }
         .cell.valid-move::after {
-            content: ''; position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%); width: 12px; height: 12px;
-            border-radius: 50%; background: rgba(255,255,255,0.5);
-            box-shadow: 0 0 10px rgba(255,255,255,0.8); pointer-events: none;
+            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px;
+            border-radius: 50%; background: rgba(255,255,255,0.5); box-shadow: 0 0 10px rgba(255,255,255,0.8); pointer-events: none;
         }
         .cell.valid-move:hover { background: var(--cell-hover); }
         .h-edge, .v-edge { background: transparent; transition: background 0.2s, box-shadow 0.2s; cursor: pointer; }
@@ -159,19 +140,65 @@
             opacity: 0; pointer-events: none; transition: opacity 0.3s; backdrop-filter: blur(5px);
         }
         .modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        /* --- 모션 그래픽 튜토리얼 --- */
+        .tutorial-stage {
+            position: relative; width: 100%; max-width: 800px; height: 500px; 
+            background: #111; border-radius: 15px; border: 2px solid #333; overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+        }
+        .tut-text { position: absolute; top: 30px; left: 0; width: 100%; text-align: center; font-size: 1.8rem; font-weight: 900; color: var(--p1-color); z-index: 10; text-shadow: 0 2px 10px rgba(0,229,255,0.5);}
+        .tut-subtext { position: absolute; top: 80px; left: 0; width: 100%; text-align: center; font-size: 1.1rem; color: #ccc; z-index: 10; line-height: 1.5;}
         
-        .rules-content { text-align: left; line-height: 1.6; font-size: 0.95rem; color: #ddd; margin-bottom: 20px;}
-        .rules-content p { margin: 5px 0;}
+        #tut-layer { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 5; pointer-events: none; }
+        
+        /* 튜토리얼용 보드 패턴 */
+        .tut-bg {
+            position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 300px;
+            background-image: linear-gradient(#333 2px, transparent 2px), linear-gradient(90deg, #333 2px, transparent 2px);
+            background-size: 60px 60px; background-position: -2px -2px; border: 2px solid #555; border-radius: 5px;
+        }
+
+        .tut-pawn {
+            position: absolute; width: 34px; height: 34px; border-radius: 50%; 
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); border: 2px solid #fff;
+        }
+        .tut-pawn.p1 { background: var(--p1-color); box-shadow: var(--p1-glow); }
+        .tut-pawn.p2 { background: var(--p2-color); box-shadow: var(--p2-glow); }
+        
+        .tut-wall {
+            position: absolute; background: var(--wall-placed); box-shadow: var(--wall-glow);
+            border-radius: 2px; transition: all 0.4s ease; opacity: 0; transform: scale(0.5);
+        }
+        .tut-wall.active { opacity: 1; transform: scale(1); }
+        .tut-wall.invalid { background: var(--p2-color); box-shadow: var(--p2-glow); }
+
+        .tut-target-line {
+            position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 10px; background: rgba(0, 229, 255, 0.3); box-shadow: 0 0 15px var(--p1-color);
+            border-radius: 5px; opacity: 0; transition: opacity 0.5s;
+        }
+
+        .tut-controls { margin-top: 20px; display: flex; gap: 20px; }
+
+        @media (max-width: 600px) {
+            .tutorial-stage { height: 400px; }
+            .tut-text { font-size: 1.4rem; top: 20px; }
+            .tut-subtext { font-size: 0.95rem; top: 60px; padding: 0 10px; }
+            .tut-bg { width: 250px; height: 250px; background-size: 50px 50px; top: 130px; }
+            .tut-target-line { width: 250px; top: 130px; }
+        }
     </style>
 </head>
 <body>
 
     <!-- 1. 메인 메뉴 화면 -->
     <div id="screen-menu" class="screen active">
-        <h1 class="title">Gworeedo</h1>
+        <h1 class="title">Gworeedo<br><span style="font-size:1.2rem; color:#aaa; font-weight:normal;">Board Game</span></h1>
         <button class="btn" onclick="startLocalGame()">로컬 플레이 (1기기 2인용)</button>
         <button class="btn btn-primary" onclick="showScreen('screen-online')">온라인 매칭 (방 만들기/접속)</button>
-        <button class="btn" onclick="document.getElementById('modal-rules').classList.add('active')">게임 하는 방법</button>
+        <button class="btn" style="background:transparent; border-color:#555;" onclick="startTutorial()">모션 그래픽 튜토리얼</button>
     </div>
 
     <!-- 2. 온라인 로비 화면 -->
@@ -193,7 +220,7 @@
             <button class="btn" style="width:100%;" onclick="joinRoom()">방 접속하기 (P2)</button>
             <p id="join-status" style="color:var(--p2-color); font-size:0.9rem; margin-top:10px;"></p>
 
-            <button class="btn" style="width:100%; margin-top: 20px; border:none; background:transparent;" onclick="showScreen('screen-menu')">뒤로가기</button>
+            <button class="btn" style="width:100%; margin-top: 20px; border:none; background:transparent;" onclick="exitGame()">뒤로가기</button>
         </div>
     </div>
 
@@ -214,28 +241,21 @@
                 <div id="pawn2" class="pawn p2" style="--r: 0; --c: 4;"></div>
             </div>
         </div>
-        <button class="btn" style="margin-top:20px; padding: 10px 20px;" onclick="exitGame()">게임 종료</button>
+        <button class="btn" style="margin-top:20px; padding: 10px 20px; width:150px; background:transparent;" onclick="exitGame()">게임 종료</button>
     </div>
 
-    <!-- 룰 모달 -->
-    <div id="modal-rules" class="modal-overlay">
-        <div class="panel" style="max-width: 500px;">
-            <h2 style="margin-top:0; color:var(--p1-color)">게임 방법</h2>
-            <div class="rules-content">
-                <p><b>목표:</b> 자신의 말을 반대편 끝 줄(아무 칸이나)에 먼저 도달시키는 사람이 승리합니다.</p>
-                <p><b>턴 진행:</b> 자신의 턴에 <b>'말을 1칸 이동'</b>하거나 <b>'벽을 1개 설치'</b>할 수 있습니다.</p>
-                <hr style="border-color:#333; margin:15px 0;">
-                <p><b>말 이동 규칙 (점프 룰):</b></p>
-                <p>- 상하좌우 1칸씩 이동 가능합니다 (벽으로 막힌 곳 제외).</p>
-                <p>- 상대방 말과 마주친 경우 <b>뛰어넘을 수 있습니다(직선 점프).</b></p>
-                <p>- 상대방 말 뒤에 벽이 있거나 맵 끝이라 직선으로 넘을 수 없는 경우, 상대방 말의 <b>양 옆으로 대각선 점프</b>가 가능합니다.</p>
-                <hr style="border-color:#333; margin:15px 0;">
-                <p><b>벽 설치 규칙:</b></p>
-                <p>- 벽은 2칸의 길이를 가지며 타일 사이에 설치합니다.</p>
-                <p>- 남은 벽 갯수(시작 시 10개)가 있어야 설치 가능합니다.</p>
-                <p>- <b>중요:</b> 상대방이나 자신이 목표 지점으로 가는 <b>길을 아예 막아버리는 벽은 설치할 수 없습니다.</b> (자동 차단됨)</p>
-            </div>
-            <button class="btn btn-primary" style="width:100%; margin-bottom:0;" onclick="document.getElementById('modal-rules').classList.remove('active')">닫기</button>
+    <!-- 4. 모션 그래픽 튜토리얼 화면 -->
+    <div id="screen-tutorial" class="screen">
+        <div class="tutorial-stage">
+            <div class="tut-text" id="tut-title">궈리도 룰 완벽 가이드</div>
+            <div class="tut-subtext" id="tut-desc">아래 시작하기 버튼을 눌러 모션 그래픽으로 룰을 배워보세요.</div>
+            <div class="tut-bg"></div>
+            <div class="tut-target-line" id="tut-target"></div>
+            <div id="tut-layer"></div>
+        </div>
+        <div class="tut-controls">
+            <button class="btn" style="width:150px; background:transparent;" onclick="showScreen('screen-menu')">종료</button>
+            <button class="btn btn-primary" style="width:150px;" onclick="nextTutStep()" id="tut-next-btn">시작하기</button>
         </div>
     </div>
 
@@ -257,6 +277,167 @@
     }
 
     // ==========================================
+    // 모션 그래픽 튜토리얼 로직
+    // ==========================================
+    let tutStep = 0;
+    let tutTimers = [];
+    const tutLayer = document.getElementById('tut-layer');
+    const tutTitle = document.getElementById('tut-title');
+    const tutDesc = document.getElementById('tut-desc');
+
+    function clearTut() {
+        tutTimers.forEach(t => clearTimeout(t));
+        tutTimers = [];
+        tutLayer.innerHTML = '';
+        document.getElementById('tut-target').style.opacity = 0;
+    }
+
+    function addTutTimer(fn, delay) {
+        tutTimers.push(setTimeout(fn, delay));
+    }
+
+    function createTutElement(type, cls, x, y, w, h) {
+        const el = document.createElement('div');
+        el.className = `tut-${type} ${cls}`;
+        // 모바일 대응을 위해 % 기반 배치
+        el.style.left = `calc(50% - 150px + ${x}px)`;
+        el.style.top = `calc(150px + ${y}px)`; 
+        if(w) el.style.width = w + 'px';
+        if(h) el.style.height = h + 'px';
+        
+        // 반응형 스케일 조정을 위해 media query 값 연동 (간단한 수식)
+        const isMobile = window.innerWidth <= 600;
+        if(isMobile) {
+            el.style.left = `calc(50% - 125px + ${x * (250/300)}px)`;
+            el.style.top = `calc(130px + ${y * (250/300)}px)`;
+            if(type === 'wall') {
+                if(w > h) { el.style.width = (w*(250/300))+'px'; el.style.height = '10px'; }
+                else { el.style.height = (h*(250/300))+'px'; el.style.width = '10px'; }
+            }
+        }
+        
+        tutLayer.appendChild(el);
+        return el;
+    }
+
+    function moveTutPawn(pawn, x, y) {
+        const isMobile = window.innerWidth <= 600;
+        if(isMobile) {
+            pawn.style.left = `calc(50% - 125px + ${x * (250/300)}px)`;
+            pawn.style.top = `calc(130px + ${y * (250/300)}px)`;
+        } else {
+            pawn.style.left = `calc(50% - 150px + ${x}px)`;
+            pawn.style.top = `calc(150px + ${y}px)`;
+        }
+    }
+
+    function startTutorial() {
+        showScreen('screen-tutorial');
+        tutStep = 0;
+        clearTut();
+        document.getElementById('tut-next-btn').innerText = "시작하기";
+        tutTitle.innerText = "궈리도 룰 완벽 가이드";
+        tutDesc.innerText = "아래 시작하기 버튼을 눌러 모션 그래픽으로 룰을 배워보세요.";
+    }
+
+    function nextTutStep() {
+        document.getElementById('tut-next-btn').innerText = "다음";
+        tutStep++;
+        clearTut();
+
+        if (tutStep === 1) {
+            tutTitle.innerText = "1. 승리 조건";
+            tutDesc.innerHTML = "자신의 말을 <b style='color:var(--p1-color)'>반대편 끝 줄</b>에 먼저 도달시키는 사람이 승리합니다.";
+            
+            document.getElementById('tut-target').style.opacity = 1;
+            const p1 = createTutElement('pawn', 'p1', 133, 253); // 하단 중앙 쯤
+            
+            addTutTimer(() => moveTutPawn(p1, 133, 193), 500);
+            addTutTimer(() => moveTutPawn(p1, 133, 133), 1100);
+            addTutTimer(() => moveTutPawn(p1, 133, 73), 1700);
+            addTutTimer(() => moveTutPawn(p1, 133, 13), 2300); // 골인
+        } 
+        else if (tutStep === 2) {
+            tutTitle.innerText = "2. 기본 행동 (이동 또는 벽 설치)";
+            tutDesc.innerHTML = "자신의 턴에 <b style='color:#fff'>상하좌우로 1칸 이동</b>하거나, <b style='color:var(--wall-placed)'>벽을 1개 설치</b>합니다.";
+            
+            const p1 = createTutElement('pawn', 'p1', 133, 193);
+            
+            // 이동 시연
+            addTutTimer(() => moveTutPawn(p1, 133, 133), 800);
+            
+            // 벽 설치 시연
+            addTutTimer(() => {
+                const wall = createTutElement('wall', 'active', 60, 115, 120, 10); // 가로 벽
+            }, 1800);
+            
+            addTutTimer(() => {
+                tutDesc.innerText = "벽에 막히면 돌아가야 합니다.";
+                moveTutPawn(p1, 193, 133); // 우측으로 우회
+            }, 2600);
+        }
+        else if (tutStep === 3) {
+            tutTitle.innerText = "3. 직선 점프 규칙";
+            tutDesc.innerHTML = "상대방 말과 마주친 경우, <b style='color:var(--p1-color)'>상대방을 뛰어넘어 2칸 전진</b>할 수 있습니다.";
+            
+            const p1 = createTutElement('pawn', 'p1', 133, 193);
+            const p2 = createTutElement('pawn', 'p2', 133, 133);
+
+            addTutTimer(() => {
+                moveTutPawn(p1, 133, 73); // p2를 넘어감
+                p1.style.transform = "scale(1.3)"; // 점프 효과
+            }, 1000);
+            addTutTimer(() => { p1.style.transform = "scale(1)"; }, 1300);
+        }
+        else if (tutStep === 4) {
+            tutTitle.innerText = "4. 대각선 점프 규칙";
+            tutDesc.innerHTML = "상대방 뒤에 벽이 있다면, <b style='color:var(--p1-color)'>상대방의 양 옆 대각선</b>으로 뛰어넘습니다.";
+            
+            const p1 = createTutElement('pawn', 'p1', 133, 193);
+            const p2 = createTutElement('pawn', 'p2', 133, 133);
+            createTutElement('wall', 'active', 60, 115, 120, 10); // p2 뒤 벽
+
+            addTutTimer(() => {
+                moveTutPawn(p1, 73, 133); // 좌측 대각선 점프
+                p1.style.transform = "scale(1.3)";
+            }, 1200);
+            addTutTimer(() => { p1.style.transform = "scale(1)"; }, 1500);
+        }
+        else if (tutStep === 5) {
+            tutTitle.innerText = "5. 길막 금지 규칙 (가장 중요)";
+            tutDesc.innerHTML = "상대방이 목표로 가는 <b style='color:var(--p2-color)'>마지막 길을 아예 막아버리는 벽</b>은 설치 불가합니다.";
+            
+            const p1 = createTutElement('pawn', 'p1', 133, 193);
+            
+            // 이미 ㄷ자 모양으로 둘러싸인 상황 연출
+            createTutElement('wall', 'active', 60, 115, 120, 10); // 상단
+            createTutElement('wall', 'active', 50, 125, 10, 120); // 좌측
+            createTutElement('wall', 'active', 200, 125, 10, 120); // 우측
+
+            addTutTimer(() => {
+                // 마지막 퇴로를 막으려는 벽
+                const badWall = createTutElement('wall', 'invalid active', 60, 235, 120, 10);
+                
+                let shake = setInterval(() => {
+                    badWall.style.transform = `translateX(${(Math.random()-0.5)*10}px)`;
+                }, 50);
+
+                setTimeout(() => {
+                    clearInterval(shake);
+                    badWall.style.opacity = 0; // 거부됨
+                    tutDesc.innerHTML = "길은 반드시 <b style='color:var(--p1-color)'>1개 이상 열려 있어야</b> 합니다!";
+                }, 1500);
+            }, 1000);
+            
+            addTutTimer(() => { document.getElementById('tut-next-btn').innerText = "메인으로"; }, 2500);
+        }
+        else {
+            showScreen('screen-menu');
+        }
+    }
+
+
+    // ==========================================
     // 네트워크 (WebRTC PeerJS) 로직
     // ==========================================
     let peer = null;
@@ -265,7 +446,6 @@
     let myPlayerId = 0; // 0: 로컬, 1: P1(호스트), 2: P2(게스트)
     const APP_PREFIX = 'gwo-';
 
-    // 5자리 랜덤 방 코드 생성
     const generateShortId = () => Math.random().toString(36).substring(2, 7).toUpperCase();
 
     function createRoom() {
@@ -322,7 +502,6 @@
         myPlayerId = role;
         
         conn.on('data', data => {
-            // 네트워크로부터 액션 수신
             if(data.action === 'MOVE') executeMove(data.r, data.c);
             if(data.action === 'WALL') executeWall(data.gridR, data.gridC, data.type, data.ir, data.ic);
         });
@@ -420,7 +599,7 @@
     const hasVWallLeft = (r, c) => isVWall(r, c-1) || isVWall(r-1, c-1);
     const hasVWallRight = (r, c) => isVWall(r, c) || isVWall(r-1, c);
 
-    // BFS 길찾기 (벽 설치 시 차단 여부 검증용)
+    // BFS 길찾기
     function canReachTarget(player, targetRow) {
         let q = [{r: player.r, c: player.c}];
         let visited = Array.from({length: 9}, () => Array(9).fill(false));
@@ -471,17 +650,15 @@
         let r = cp.r, c = cp.c;
         const addMove = (nr, nc) => { if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) moves.push({r: nr, c: nc}); };
 
-        // 상
         if (r > 0 && !hasHWallAbove(r, c)) {
             if (op.r === r-1 && op.c === c) {
-                if (r-1 > 0 && !hasHWallAbove(r-1, c)) addMove(r-2, c); // 직선점프
-                else { // 대각선점프
+                if (r-1 > 0 && !hasHWallAbove(r-1, c)) addMove(r-2, c);
+                else {
                     if (c > 0 && !hasVWallLeft(r-1, c)) addMove(r-1, c-1);
                     if (c < 8 && !hasVWallRight(r-1, c)) addMove(r-1, c+1);
                 }
             } else addMove(r-1, c);
         }
-        // 하
         if (r < 8 && !hasHWallBelow(r, c)) {
             if (op.r === r+1 && op.c === c) {
                 if (r+1 < 8 && !hasHWallBelow(r+1, c)) addMove(r+2, c);
@@ -491,7 +668,6 @@
                 }
             } else addMove(r+1, c);
         }
-        // 좌
         if (c > 0 && !hasVWallLeft(r, c)) {
             if (op.r === r && op.c === c-1) {
                 if (c-1 > 0 && !hasVWallLeft(r, c-1)) addMove(r, c-2);
@@ -501,7 +677,6 @@
                 }
             } else addMove(r, c-1);
         }
-        // 우
         if (c < 8 && !hasVWallRight(r, c)) {
             if (op.r === r && op.c === c+1) {
                 if (c+1 < 8 && !hasVWallRight(r, c+1)) addMove(r, c+2);
@@ -515,11 +690,11 @@
     }
 
     // ==========================================
-    // 액션 핸들러 (입력 -> 네트워크 송신 -> 실행)
+    // 액션 핸들러
     // ==========================================
     function attemptMove(r, c) {
         if (!gameActive) return;
-        if (isOnline && turn !== myPlayerId) return; // 온라인일땐 내 턴에만 작동
+        if (isOnline && turn !== myPlayerId) return;
         
         const moves = getValidMoves();
         if (moves.some(m => m.r === r && m.c === c)) {
@@ -576,7 +751,6 @@
         let cp = turn === 1 ? p1 : p2;
         cp.walls--;
         
-        // 시각적 업데이트 (수신받은 쪽은 currentWallHover가 없으므로 계산해서 렌더링)
         let elements = [];
         if (type === 'H') elements = [gridEls[ir*2+1][ic*2], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+1][ic*2+2]];
         else elements = [gridEls[ir*2][ic*2+1], gridEls[ir*2+1][ic*2+1], gridEls[ir*2+2][ic*2+1]];
@@ -627,7 +801,6 @@
 
         document.querySelectorAll('.cell').forEach(c => c.classList.remove('valid-move'));
 
-        // 내 턴이거나 로컬 게임일 때만 이동 가능 마커 표시
         if (gameActive && (!isOnline || turn === myPlayerId)) {
             const moves = getValidMoves();
             moves.forEach(m => gridEls[m.r * 2][m.c * 2].classList.add('valid-move'));
